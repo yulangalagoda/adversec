@@ -155,3 +155,108 @@ def relaxed_dedup(df, strict_df, feature_columns, min_rows_per_class):
         relaxed = pd.concat(pieces, ignore_index=True)
         relaxed = relaxed.sample(frac=1.0, random_state=config.RANDOM_SEED).reset_index(drop=True)
         return relaxed
+
+
+# Train-test split
+def split_train_test(strict_df, feature_columns, test_fraction=0.2, small_class_threshold=6, random_seed=None):
+        """
+        Split strict unique signatures into train and test, per class.
+
+         A class with fewer than threshold unique signatures sends exactly 1 signature to test.
+         A larger class sends 'test_fraction' of its signatures to test.
+         Splitting happens on the unique signatures before any augmentation.
+         Hence, no duplicated or synthetic copy can straddle train and test.
+
+         Args:
+            strict_df: the strict de-duplicated DF.
+            feature_columns: the CAN feature columns.
+            test_fraction: proportion to test for large enough classes.
+            small_class_threshold: classes below this size use the 1-signature floor.
+            random_seed: seed for reproducible shuffling. Falls back to config.
+        
+        Returns:
+            (train_df, test_df): two DF with disjoint signatures.
+        """
+
+        # Use project seed unless a specific one is passed.
+        seed = random_seed if random_seed is not None else config.RANDOM_SEED
+
+        train_pieces = []
+        test_pieces = []
+
+        # Handle classes independently to apply floor when needed
+        for class_name in sorted(strict_df["true_class"].unique()):
+                # All unique signatures of this class
+                class_rows = strict_df[strict_df["true_class"] == class_name]
+                n = len(class_rows)
+
+                # Shuffle the class's rows reproducibly
+                shuffled = class_rows.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+
+                # Decide how many go to test
+                if n < small_class_threshold:
+                        n_test = 1
+                else:
+                        n_test = round(n * test_fraction)
+                
+                # First n_test rows -> test, the rest -> train
+                test_pieces.append(shuffled.iloc[:n_test])
+                train_pieces.append(shuffled.iloc[n_test:])
+        
+        # Stack the pieces back into single train and test frames
+        train_df = pd.concat(train_pieces, ignore_index=True)
+        test_df = pd.concat(test_pieces, ignore_index=True)
+
+        return train_df, test_df
+
+
+# Train class duplication
+def duplicate_train_classes(train_df, target_per_class=200, benign_class="benign", random_seed=None):
+        """
+        Light duplication of attack classes in the TRAIN split, for convergence.
+
+        Each attack class is sampled upto 'target_per_class' rows by repeating its real signatures.
+        Benign is left untouched.
+        This gives the optimiser enough gradient signal per class so training does not ignore rare classes.
+        It is a convergence aid only: it adds volume, not diversity.
+
+        Must be applied to the TRAIN split only, after the train/test split.
+        Hence, no duplicated rows can ever appear in the test set.
+
+        Args:
+            train_df: the training split.
+            target_per_class: flat row target for each attack class.
+            benign_class: name of the class to leave untouched.
+            random_seed: seed for reproducible sampling. Falls back to config.
+        
+        Returns:
+            A new DF with attack classes duplicated up to the target.
+        """
+
+        seed = random_seed if random_seed is not None else config.RANDOM_SEED
+
+        pieces = []
+
+        for class_name in sorted(train_df["true_class"].unique()):
+                class_rows = train_df[train_df["true_class"] == class_name]
+                n = len(class_rows)
+
+                # Benign is left as is
+                if class_name == benign_class:
+                        pieces.append(class_rows)
+                        continue
+                
+                # Classes that already meet the target kept as is
+                if n >= target_per_class:
+                        pieces.append(class_rows)
+                        continue
+                
+                # Otherwise sample with replacement up to the target.
+                n_extra = target_per_class - n
+                extra = class_rows.sample(n=n_extra, replace=True, random_state=seed)
+                pieces.append(pd.concat([class_rows, extra], ignore_index=True))
+
+        # Combine and shuffle all classes
+        duplicated = pd.concat(pieces, ignore_index=True)
+        duplicated = duplicated.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+        return duplicated
