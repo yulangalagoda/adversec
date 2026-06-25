@@ -92,3 +92,95 @@ class CNN1D(nn.Module):
 
         # Return raw scores (logits), one per class. SOFTMAX to be applied later with the loss function internally.
         return x
+    
+
+# 1D-CNN Training function
+def train_cnn(
+        model,
+        X_train,
+        y_train,
+        n_epochs=50,
+        batch_size=64,
+        lr=1e-3,
+        class_weights=None,
+        device="cpu",
+        random_seed=42
+):
+    """
+    Train a CNN1D with gradient descent and print the loss per epoch.
+
+    Args:
+        model: an instance of CNN1D
+        X_train: scaled feature array, shape (n_rows, n_features)
+        y_train: integer label array, shape (n_rows,)
+        n_epochs: how many full passes over the data
+        batch size: rows per gradient update
+        lr: learning rate
+        class_weights: optional per-class weights for the loss, to counter imbalance
+        device: "cuda" or "cpu"
+        random_seed: for reproducible batch shuffling and weight init.
+
+    Returns:
+        The trained model (also modified in place).
+    """
+
+    # Reproducibility
+    torch.manual_seed(random_seed)
+
+    # Move the model to chosen device
+    model = model.to(device)
+
+    # Numpy arrays to torch tensors
+    X = torch.tensor(X_train, dtype=torch.float32, device=device)
+    y = torch.tensor(y_train, dtype=torch.long, device=device)
+
+    # The loss function: CrossEntropyLoss (standard for multi-class classification)
+    # Applies softmax internally
+    # Weight=class_weights makes rare class mistakes cost more, countering imbalance
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+
+    # The optimizer: ADAM
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    n_rows = X.shape[0]
+
+    # Put model in training mode.
+    model.train()
+
+    for epoch in range(n_epochs):
+        # Shuffle the row order each epoch so batches differ run to run.
+        perm = torch.randperm(n_rows, device=device)
+
+        epoch_loss = 0.0
+        n_batches = 0
+
+        # Walk through the data in chunks of batch size
+        for start in range(0, n_rows, batch_size):
+            idx = perm[start:start + batch_size]
+            xb = X[idx]
+            yb = y[idx]
+
+            # 1. Clear old gradients
+            optimizer.zero_grad()
+
+            # 2. Forward pass: model predicts logits for this batch
+            logits = model(xb)
+
+            # 3. Compute the loss
+            loss = criterion(logits, yb)
+
+            # 4. Backward pass
+            loss.backward()
+
+            # 5. Update step
+            optimizer.step()
+
+            epoch_loss += loss.item()
+            n_batches += 1
+
+        # Print average loss this epoch: should fail over time.
+        avg_loss = epoch_loss / n_batches
+        if (epoch + 1) % 5 == 0 or epoch == 0:
+            print(f"    epoch {epoch + 1:3d}/{n_epochs}     loss {avg_loss:.4f}")
+    
+    return model
