@@ -1,0 +1,118 @@
+"""
+crossval.py
+===========
+Stage 3 cross-validation, two schemes:
+    Scheme B (row-level): Standard stratified K-fold over the 3838 Duplicated rows. Copies of a signature leak across folds, so results are clean but inflated.
+    Scheme A (signature-level): K-fold over the unique signatures, with light duplication applied inside each fold's training portion only.
+
+The gap between A and B is itself a reported finding.
+"""
+
+# Library import
+import numpy as np
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import f1_score
+import torch
+
+import config
+import models
+import cleaning
+import preprocessing
+
+
+# A helper to score one model's predictions
+def _macro_f1(y_true, y_pred):
+    """
+    Macro-F1 for one fold's predictions
+    """
+    return f1_score(y_true, y_pred, average="macro", zero_division=0)
+
+
+# Scheme B
+def crossval_rowlevel(X, y, n_splits=5, device="cpu", random_seed=42, cnn_epochs=50, class_weights=None):
+    """
+    Scheme B: stratified K-fold over the duplicated rows directly.
+
+    Leaks duplicated copies across folds.
+    Returns per-fold macro-F1 lists for RF and CNN.
+    """
+
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
+
+    rf_scores = []
+    cnn_scores = []
+
+    # skf.split yields train/test index arrays for each fold, keeping class proportions roughly equal in every fold.
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(X, y), start=1):
+        X_tr, X_te = X[tr_idx], X[te_idx]
+        y_tr, y_te = y[tr_idx], y[te_idx]
+
+        # --- Random Forest ---
+        rf = models.build_random_forest(random_seed=random_seed)
+        rf.fit(X_tr, y_tr)
+        rf_pred = rf.predict(X_te)
+        rf_scores.append(_macro_f1(y_te, rf_pred))
+
+        # --- 1D-CNN ---
+        cnn = models.CNN1D(n_features=X.shape[1], n_classes=len(np.unique(y)))
+        cnn = models.train_cnn(
+            cnn, X_tr, y_tr,
+            n_epochs=cnn_epochs, device=device,
+            class_weights=class_weights, random_seed=random_seed
+        )
+        cnn.eval()
+        with torch.no_grad():
+            X_te_t = torch.tensor(X_te, dtype=torch.float32, device=device)
+            cnn_pred = cnn(X_te_t).argmax(dim=1).cpu().numpy()
+        cnn_scores.append(_macro_f1(y_te, cnn_pred))
+
+        print(f"    fold {fold}: RF={rf_scores[-1]:.4f}     CNN={cnn_scores[-1]:.4f}")
+    
+    return {"rf": rf_scores, "cnn": cnn_scores}
+
+# Scheme A
+def crossval_signature_level(strict_df, feature_columns, n_splits=2, dup_target=200, device="cpu", random_seed=42, cnn_epochs=50):
+    """
+    Scheme A: K-fold over unique signatures, duplicate inside train folds only
+    
+    No signature copy crosses the fold boundary, so this is the high variance estimate.
+
+    Returns per-fold macro-F1 lists for RN and CNN.
+    """
+
+    rf_scores = []
+    cnn_scores = []
+
+    # Stratify the signature-level split by class.
+    y_sig = strict_df["true_class"].values
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
+
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(strict_df, y_sig), start=1):
+        # Split the unique signatures into this fold's train and test.
+        train_sig = strict_df.iloc[tr_idx].reset_index(drop=True)
+        test_sig = strict_df.iloc[te_idx].reset_index(drop=True)
+
+        # Duplicate attack classes in the train signatures only
+        train_dup = cleaning.duplicate_train_classes(train_sig, target_per_class=dup_target, random_seed=random_seed)
+
+        # Encode labels and scale features, fitting on this fold's train only.
+        y_tr, y_te, _ = preprocessing.encode_labels(train_dup, test_sig)
+        X_tr, X_te, _ = preprocessing.scale_features(train_dup, test_sig, feature_columns)
+
+        # --- Random Forest ---
+        rf = models.build_random_forest(random_seed=random_seed)
+        rf.fit(X_tr, y_tr)
+        rf_scores.append(_macro_f1(y_te, rf.predict(X_te)))
+
+        # --- 1D-CNN ---
+        cnn = models.CNN1D(n_features=len(feature_columns), n_classes=len(np.unique(y_tr)))
+        cnn = models.train_cnn(cnn, X_tr, y_tr, n_epochs=cnn_epochs, device=device, random_seed=random_seed)
+        cnn.eval()
+        with torch.no_grad():
+            X_te_t = torch.tensor(X_te, dtype=torch.float32, device=device)
+            cnn_pred = cnn(X_te_t).argmax(dim=1).cpu().numpy()
+        cnn_scores.append(_macro_f1(y_te, cnn_pred))
+
+        print(f"    fold {fold}: RF={rf_scores[-1]:.4f}     CNN={cnn_scores[-1]:.4f}")
+    
+    return {"rf": rf_scores, "cnn":cnn_scores}
