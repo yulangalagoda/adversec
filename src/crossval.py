@@ -12,6 +12,7 @@ The gap between A and B is itself a reported finding.
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import f1_score
+from sklearn.feature_selection import SelectKBest, f_classif
 import torch
 
 import config
@@ -80,7 +81,9 @@ def crossval_signature_level(
         random_seed=42,
         cnn_epochs=50,
         use_duplication=True,
-        use_class_weights=False
+        use_class_weights=False,
+        use_anova=False,
+        anova_k=5,
 ):
     """
     Scheme A: K-fold over unique signatures, duplicate inside train folds only
@@ -112,13 +115,23 @@ def crossval_signature_level(
         y_tr, y_te, _ = preprocessing.encode_labels(train_dup, test_sig)
         X_tr, X_te, _ = preprocessing.scale_features(train_dup, test_sig, feature_columns)
 
+        # Optional ANOVA F-test feature selection, fitted on train only (per-fold)
+        if use_anova:
+            selector = SelectKBest(score_func=f_classif, k=anova_k)
+            X_tr = selector.fit_transform(X_tr, y_tr)   # fit on train
+            X_te = selector.transform(X_te)             # apply same selection to test
+            selected = [feature_columns[i] for i in selector.get_support(indices=True)]
+            if fold == 1:
+                print(f"    ANOVA selected (fold 1): {selected}")
+
         # --- Random Forest ---
         rf = models.build_random_forest(random_seed=random_seed)
         rf.fit(X_tr, y_tr)
         rf_scores.append(_macro_f1(y_te, rf.predict(X_te)))
 
         # --- 1D-CNN ---
-        cnn = models.CNN1D(n_features=len(feature_columns), n_classes=len(np.unique(y_tr)))
+        cnn = models.CNN1D(n_features=X_tr.shape[1], n_classes=len(np.unique(y_tr)))        
+        
         # Optionally compute balance class weights for this fold's training labels.
         cw = None
         if use_class_weights:
