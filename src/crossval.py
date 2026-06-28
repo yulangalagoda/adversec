@@ -71,7 +71,17 @@ def crossval_rowlevel(X, y, n_splits=5, device="cpu", random_seed=42, cnn_epochs
     return {"rf": rf_scores, "cnn": cnn_scores}
 
 # Scheme A
-def crossval_signature_level(strict_df, feature_columns, n_splits=2, dup_target=200, device="cpu", random_seed=42, cnn_epochs=50):
+def crossval_signature_level(
+        strict_df,
+        feature_columns,
+        n_splits=2,
+        dup_target=200,
+        device="cpu",
+        random_seed=42,
+        cnn_epochs=50,
+        use_duplication=True,
+        use_class_weights=False
+):
     """
     Scheme A: K-fold over unique signatures, duplicate inside train folds only
     
@@ -93,7 +103,10 @@ def crossval_signature_level(strict_df, feature_columns, n_splits=2, dup_target=
         test_sig = strict_df.iloc[te_idx].reset_index(drop=True)
 
         # Duplicate attack classes in the train signatures only
-        train_dup = cleaning.duplicate_train_classes(train_sig, target_per_class=dup_target, random_seed=random_seed)
+        if use_duplication:
+            train_dup = cleaning.duplicate_train_classes(train_sig, target_per_class=dup_target, random_seed=random_seed)
+        else:
+            train_dup = train_sig.copy()
 
         # Encode labels and scale features, fitting on this fold's train only.
         y_tr, y_te, _ = preprocessing.encode_labels(train_dup, test_sig)
@@ -106,6 +119,13 @@ def crossval_signature_level(strict_df, feature_columns, n_splits=2, dup_target=
 
         # --- 1D-CNN ---
         cnn = models.CNN1D(n_features=len(feature_columns), n_classes=len(np.unique(y_tr)))
+        # Optionally compute balance class weights for this fold's training labels.
+        cw = None
+        if use_class_weights:
+            from sklearn.utils.class_weight import compute_class_weight
+            classes_arr = np.unique(y_tr)
+            w = compute_class_weight(class_weight="balanced", classes=classes_arr, y=y_tr)
+            cw = torch.tensor(w, dtype=torch.float32, device=device)
         cnn = models.train_cnn(cnn, X_tr, y_tr, n_epochs=cnn_epochs, device=device, random_seed=random_seed)
         cnn.eval()
         with torch.no_grad():
