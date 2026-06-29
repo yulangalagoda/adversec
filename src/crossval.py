@@ -19,6 +19,8 @@ import config
 import models
 import cleaning
 import preprocessing
+import defense
+import attacks
 
 
 # A helper to score one model's predictions
@@ -149,3 +151,105 @@ def crossval_signature_level(
         print(f"    fold {fold}: RF={rf_scores[-1]:.4f}     CNN={cnn_scores[-1]:.4f}")
     
     return {"rf": rf_scores, "cnn":cnn_scores}
+
+
+
+
+
+# The defended-model CV
+def crossval_defended(
+        strict_df, feature_columns, attack_eps=0.10,
+        n_splits=2, dup_target=200, device="cpu",
+        random_seed=42, cnn_epochs=50,
+):
+    """
+    Cross validate the full attack+defense pipleline.
+
+    For each fold:
+        split signatures
+        duplicate trian only
+        fit scaler/encoder on train only
+        train base CNN
+        build defended CNNs
+        craft test-side PGD attack at attack_eps from that fold's baseline
+        evaluate all 4 models on robust support macro-F1 under that attack
+
+    Returns per-fold robust-support macro-F1 for each model, clean and attacked.
+    """
+    from sklearn.utils.class_weight import compute_class_weight
+
+    y_sig = strict_df["true_class"].values
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
+
+    out = {k: [] for k in ["base_clean","base_adv","pgd_clean","pgd_adv",
+                            "multi_clean","multi_adv","rf_clean","rf_adv"]}
+    
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(strict_df, y_sig), start=1):
+        train_sig = strict_df.iloc[tr_idx].reset_index(drop=True)
+        test_sig = strict_df.iloc[te_idx].reset_index(drop=True)
+
+        # Duplicate train only and then preprocess fit-on-train-only
+        train_dup = cleaning.duplicate_train_classes(
+            train_sig, target_per_class=dup_target, random_seed=random_seed,
+        )
+        y_tr, y_te, enc = preprocessing.encode_labels(train_dup, test_sig)
+        X_tr, X_te, _ = preprocessing.scale_features(train_dup, test_sig, feature_columns)
+
+        # Resolve robust support classes
+        names = list(enc.classes_)
+        robust = [i for i, n in enumerate(names)
+                  if n in ("DoS", "benign", "spoofing-RPM")]
+        
+        # per-fold class weights
+        w = compute_class_weight("balanced", classes=np.unique(y_tr), y=y_tr)
+        cw = torch.tensor(w, dtype=torch.float32, device=device)
+
+        # Base CNN
+        base = models.CNN1D(n_features=len(feature_columns), n_classes=len(np.unique(y_tr)))
+        base = models.train_cnn(
+            base, X_tr, y_tr, n_epochs=cnn_epochs, device=device, class_weights=cw, random_seed=random_seed,
+        )
+
+        # Defended CNNs on both strategies
+        def_pgd = defense.adversarial_train_cnn(
+            X_tr, y_tr, strategy="pgd", n_epochs=cnn_epochs, device=device, class_weights=cw, random_seed=random_seed,
+        )
+        def_multi = defense.adversarial_train_cnn(
+            X_tr, y_tr, strategy="multi", n_epochs=cnn_epochs, device=device, class_weights=cw, random_seed=random_seed,
+        )
+
+        # RF
+        rf = models.build_random_forest(random_seed=random_seed)
+        rf.fit(X_tr, y_tr)
+
+        # Craft the test side PGD attack from this fold's baseline CNN
+        clf = attacks.wrap_cnn_for_art(base, n_features=len(feature_columns), n_classes=len(np.unique(y_tr)), device=device)
+        X_te_adv = attacks.generate_pgd(clf, X_te, epsilon=attack_eps)
+
+        # Helper: robust support macro-F1 for a CNN model on given inputs
+        def cnn_rf1(m, X):
+            m.eval()
+            with torch.no_grad():
+                p = m(torch.tensor(X, dtype=torch.float32, device=device)).argmax(1).cpu().numpy()
+            return f1_score(y_te, p, labels=robust, average="macro", zero_division=0)
+        
+        def rf_rf1(X):
+            return f1_score(y_te, rf.predict(X), labels=robust, average="macro", zero_division=0)
+            out["base_clean"].append(cnn_rf1(base, X_te));   out["base_adv"].append(cnn_rf1(base, X_te_adv))
+
+        print(f"  fold {fold}: robust labels = {robust} (names={names})")
+
+        out["base_clean"].append(cnn_rf1(base, X_te))
+        out["base_adv"].append(cnn_rf1(base, X_te_adv))
+        out["pgd_clean"].append(cnn_rf1(def_pgd, X_te))
+        out["pgd_adv"].append(cnn_rf1(def_pgd, X_te_adv))
+        out["multi_clean"].append(cnn_rf1(def_multi, X_te))
+        out["multi_adv"].append(cnn_rf1(def_multi, X_te_adv))
+        out["rf_clean"].append(rf_rf1(X_te))
+        out["rf_adv"].append(rf_rf1(X_te_adv))
+
+        print(f"  fold {fold}: base_adv={out['base_adv'][-1]:.4f} "
+              f"pgd_adv={out['pgd_adv'][-1]:.4f} multi_adv={out['multi_adv'][-1]:.4f} "
+              f"rf_adv={out['rf_adv'][-1]:.4f}")
+        
+    return out
