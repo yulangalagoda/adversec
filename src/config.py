@@ -48,3 +48,10 @@ FEATURE_MAX = 255
 # Reproductability and de-duplication settings
 RANDOM_SEED = 42                                # The conventional arbitrary choice
 RELAXED_MIN_ROWS_PER_CLASS = 1000               # For the relaxed fallback dataset to make sure the 1D-CNN has enough to learn from
+
+
+# Adversarial attacks hyper parameters
+FGSM_EPSILONS = [0.01, 0.05, 0.10, 0.20, 0.30]
+PGD_EPSILON = 0.10
+PGD_STEP_SIZE = 0.01
+PGD_MAX_ITER = 40
