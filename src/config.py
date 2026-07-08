@@ -55,3 +55,73 @@ FGSM_EPSILONS = [0.01, 0.05, 0.10, 0.20, 0.30]
 PGD_EPSILON = 0.10
 PGD_STEP_SIZE = 0.01
 PGD_MAX_ITER = 40
+
+
+
+
+
+
+
+
+# ---------------------------------------------------------------------------
+# ROAD dataset (Oak Ridge) settings
+# ---------------------------------------------------------------------------
+ROAD_RAW_DIR = DATA_DIR / "raw" / "road"                # ROAD raw captures
+ROAD_ATTACKS_DIR = ROAD_RAW_DIR / "attacks"             # attack .log files + metadata
+ROAD_AMBIENT_DIR = ROAD_RAW_DIR / "ambient"             # benign .log files
+
+# Map clean class names to the capture files that supply them.
+# Non-masquerade fabrication captures only.
+#
+# correlated-signal is EXCLUDED from modelling: it collapses to a single
+# unique signature under strict de-duplication (fully-specified fixed payload),
+# so it is not statistically viable to train or test. It is retained only as a
+# reported de-duplication statistic (the floor of the diversity gradient).
+#
+# Masquerade variants are EXCLUDED: they are built by deleting the target-ID
+# legitimate frames from the fabrication captures, so their injected frames
+# duplicate the fabrication signatures rather than adding diversity. Masquerade
+# poses a frequency-detection challenge out of scope for a payload-level model.
+ROAD_ATTACK_CAPTURES = {
+    "max-speedometer": [
+        "max_speedometer_attack_1",
+        "max_speedometer_attack_2",
+        "max_speedometer_attack_3",
+    ],
+    "reverse-light-on": [
+        "reverse_light_on_attack_1",
+        "reverse_light_on_attack_2",
+        "reverse_light_on_attack_3",
+    ],
+    "reverse-light-off": [
+        "reverse_light_off_attack_1",
+        "reverse_light_off_attack_2",
+        "reverse_light_off_attack_3",
+    ],
+    "fuzzing": [
+        "fuzzing_attack_1",
+        "fuzzing_attack_2",
+        "fuzzing_attack_3",
+    ],
+}
+
+# Captures that require fuzzing-style labelling (all-FF payload filter)
+# rather than the standard ID + interval + byte-mask labelling.
+ROAD_FUZZING_CLASSES = ["fuzzing"]
+
+# Ambient captures chosen for benign diversity (dyno + real road).
+ROAD_AMBIENT_CAPTURES = [
+    "ambient_dyno_drive_basic_long",
+    "ambient_highway_street_driving_long",
+]
+
+# Cap on benign frames sampled per ambient capture, so benign does not
+# swamp the attack classes. Seeded for reproducibility.
+ROAD_AMBIENT_SAMPLE_PER_CAPTURE = 20000
+
+
+# Adversarial-training epsilon ranges for the ROAD defence comparison.
+# MEANINGFUL: the band where classes transition robust -> collapsed (defence can learn).
+# FULL: the complete sweep, matching CICIoV methodology (includes high-eps examples).
+ROAD_DEFENCE_EPS_MEANINGFUL = [0.01, 0.05, 0.10]
+ROAD_DEFENCE_EPS_FULL = [0.01, 0.05, 0.10, 0.20, 0.30]

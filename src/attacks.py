@@ -39,49 +39,37 @@ def wrap_cnn_for_art(model, n_features=9, n_classes=6, device="cpu"):
         input_shape=(n_features,),
         nb_classes=n_classes,
         clip_values=(0.0, 1.0),
-        device_type="gpy" if device == "cuda" else "cpu"
+        device_type="gpu" if device == "cuda" else "cpu"
     )
 
     return classifier
 
 
 # FGSM
-def generate_fgsm(classifier, X, epsilon):
+def generate_fgsm(classifier, X, epsilon, mask=None):
     """
     Generate FGSM adversarial examples from X at a given epsilon.
 
-    Args:
-        classifier: the ART wrapped CNN
-        X: clean inputs to purturb, shape (n_rows, n_features), in [0,1]
-        epsilon: perturbation budget as a fraction of the feature range.
-    
-    Returns:
-        X_adv: purturbated inputs, same shape as X, clipped to [0,1]
+    mask: optional array broadcastable to X. Features where mask is 0 are NOT
+    perturbed (e.g. freeze the ID feature to attack payload bytes only).
     """
-
     attack = FastGradientMethod(estimator=classifier, eps=epsilon)
 
-    # Generate adversarial examples
-    X_adv = attack.generate(x=X.astype(np.float32))
+    if mask is not None:
+        X_adv = attack.generate(x=X.astype(np.float32), mask=mask)
+    else:
+        X_adv = attack.generate(x=X.astype(np.float32))
     return X_adv
 
 
 # PGD
-def generate_pgd(classifier, X, epsilon, step_size=None, max_iter=None):
+def generate_pgd(classifier, X, epsilon, step_size=None, max_iter=None, mask=None):
     """
     Generate PGD adversarial examples from X.
 
-    Args:
-        classifer: the ART wrapped CNN
-        X: clean inputs
-        epsilon: total purturbation budget
-        step_size: per-iteration step
-        max_iter: number of iterations
-
-    Returns:
-        X_adv: perturbated inputs, same shape as X, clipped to [0,1]
+    mask: optional array broadcastable to X. Features where mask is 0 are NOT
+    perturbed (e.g. freeze the ID feature to attack payload bytes only).
     """
-
     step = step_size if step_size is not None else config.PGD_STEP_SIZE
     iters = max_iter if max_iter is not None else config.PGD_MAX_ITER
 
@@ -92,5 +80,8 @@ def generate_pgd(classifier, X, epsilon, step_size=None, max_iter=None):
         max_iter=iters,
     )
 
-    X_adv = attack.generate(x=X.astype(np.float32))
+    if mask is not None:
+        X_adv = attack.generate(x=X.astype(np.float32), mask=mask)
+    else:
+        X_adv = attack.generate(x=X.astype(np.float32))
     return X_adv

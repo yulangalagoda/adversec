@@ -253,3 +253,181 @@ def crossval_defended(
               f"rf_adv={out['rf_adv'][-1]:.4f}")
         
     return out
+
+
+# Per-class robustness cross-validation (new: records per-class F1 under attack)
+def crossval_perclass_robustness(
+        strict_df, feature_columns, class_names,
+        epsilons, attack="pgd",
+        n_splits=5, dup_target=200, device="cpu",
+        random_seed=42, cnn_epochs=50,
+):
+    """
+    Cross-validate PER-CLASS F1 under adversarial attack across a diversity
+    gradient. For each fold: split signatures, duplicate train only, preprocess
+    fit-on-train, train the CNN, wrap for ART, craft attack examples on the test
+    set at each epsilon, and record per-class F1 for every class at every epsilon.
+
+    Returns a nested dict: results[epsilon][class_index] = list of per-fold F1s.
+    This lets us report mean +/- std per class per epsilon, so small-class
+    numbers (fuzzing, reverse-off) can be judged as stable or noisy.
+
+    Args:
+        strict_df: strict de-duplicated signatures with 'true_class'.
+        feature_columns: the 9 CAN features.
+        class_names: ordered class-name list (for reporting).
+        epsilons: list of attack epsilons to sweep.
+        attack: "pgd" or "fgsm".
+        n_splits: number of CV folds.
+        others: as in the existing CV functions.
+    """
+    from sklearn.utils.class_weight import compute_class_weight
+
+    n_classes = len(class_names)
+
+    # results[eps] = list (per class) of lists (per fold) of F1 scores
+    # Also record clean F1 for reference under key "clean".
+    results = {"clean": [[] for _ in range(n_classes)]}
+    for eps in epsilons:
+        results[eps] = [[] for _ in range(n_classes)]
+
+    y_sig = strict_df["true_class"].values
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
+
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(strict_df, y_sig), start=1):
+        train_sig = strict_df.iloc[tr_idx].reset_index(drop=True)
+        test_sig  = strict_df.iloc[te_idx].reset_index(drop=True)
+
+        # Duplicate train only, then preprocess fit-on-train-only
+        train_dup = cleaning.duplicate_train_classes(
+            train_sig, target_per_class=dup_target, random_seed=random_seed,
+        )
+        y_tr, y_te, _ = preprocessing.encode_labels(train_dup, test_sig)
+        X_tr, X_te, _ = preprocessing.scale_features(train_dup, test_sig, feature_columns)
+
+        # Per-fold balanced class weights for the CNN
+        w = compute_class_weight("balanced", classes=np.unique(y_tr), y=y_tr)
+        cw = torch.tensor(w, dtype=torch.float32, device=device)
+
+        # Train the CNN for this fold
+        cnn = models.CNN1D(n_features=len(feature_columns), n_classes=n_classes)
+        cnn = models.train_cnn(
+            cnn, X_tr, y_tr, n_epochs=cnn_epochs, device=device,
+            class_weights=cw, random_seed=random_seed,
+        )
+
+        # Wrap for ART
+        clf = attacks.wrap_cnn_for_art(
+            cnn, n_features=len(feature_columns), n_classes=n_classes, device=device,
+        )
+
+        X_te_f = X_te.astype(np.float32)
+
+        # Clean per-class F1 for this fold
+        clean_pred = clf.predict(X_te_f).argmax(axis=1)
+        clean_per = f1_score(y_te, clean_pred, average=None,
+                             labels=range(n_classes), zero_division=0)
+        for c in range(n_classes):
+            results["clean"][c].append(clean_per[c])
+
+        # Attack at each epsilon, record per-class F1
+        for eps in epsilons:
+            if attack == "pgd":
+                X_adv = attacks.generate_pgd(clf, X_te_f, epsilon=eps)
+            else:
+                X_adv = attacks.generate_fgsm(clf, X_te_f, epsilon=eps)
+            pred = clf.predict(X_adv).argmax(axis=1)
+            per = f1_score(y_te, pred, average=None,
+                           labels=range(n_classes), zero_division=0)
+            for c in range(n_classes):
+                results[eps][c].append(per[c])
+
+        print(f"  fold {fold}/{n_splits} done")
+
+    return results
+
+# Per-class defence comparison, cross-validated (baseline vs two defences)
+def crossval_defence_comparison(
+        strict_df, feature_columns, class_names,
+        epsilons, eps_meaningful, eps_full,
+        n_splits=5, dup_target=200, device="cpu",
+        random_seed=42, cnn_epochs=50,
+):
+    """
+    Cross-validate the defence comparison per class under PGD.
+
+    For each fold, trains three models on that fold's train split:
+        baseline    : plain CNN
+        def_meaning : adversarial training at eps_meaningful
+        def_full    : adversarial training at eps_full
+    Then, white-box, crafts PGD against each model and records per-class F1 at
+    each evaluation epsilon.
+
+    Returns nested dict: results[model][epsilon][class_index] = list of per-fold F1s.
+    """
+    from sklearn.utils.class_weight import compute_class_weight
+
+    n_classes = len(class_names)
+    model_keys = ["baseline", "def_meaning", "def_full"]
+    eps_keys = ["clean"] + list(epsilons)
+
+    # results[model][eps] = list (per class) of lists (per fold)
+    results = {m: {e: [[] for _ in range(n_classes)] for e in eps_keys}
+               for m in model_keys}
+
+    y_sig = strict_df["true_class"].values
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
+
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(strict_df, y_sig), start=1):
+        train_sig = strict_df.iloc[tr_idx].reset_index(drop=True)
+        test_sig  = strict_df.iloc[te_idx].reset_index(drop=True)
+
+        train_dup = cleaning.duplicate_train_classes(
+            train_sig, target_per_class=dup_target, random_seed=random_seed,
+        )
+        y_tr, y_te, _ = preprocessing.encode_labels(train_dup, test_sig)
+        X_tr, X_te, _ = preprocessing.scale_features(train_dup, test_sig, feature_columns)
+        X_te_f = X_te.astype(np.float32)
+
+        w = compute_class_weight("balanced", classes=np.unique(y_tr), y=y_tr)
+        cw = torch.tensor(w, dtype=torch.float32, device=device)
+
+        # Train the three models for this fold
+        baseline = models.CNN1D(n_features=len(feature_columns), n_classes=n_classes)
+        baseline = models.train_cnn(
+            baseline, X_tr, y_tr, n_epochs=cnn_epochs, device=device,
+            class_weights=cw, random_seed=random_seed,
+        )
+        def_meaning = defense.adversarial_train_cnn(
+            X_tr, y_tr, strategy="pgd", epsilons=eps_meaningful,
+            n_epochs=cnn_epochs, device=device, class_weights=cw, random_seed=random_seed,
+        )
+        def_full = defense.adversarial_train_cnn(
+            X_tr, y_tr, strategy="pgd", epsilons=eps_full,
+            n_epochs=cnn_epochs, device=device, class_weights=cw, random_seed=random_seed,
+        )
+
+        fold_models = {"baseline": baseline, "def_meaning": def_meaning, "def_full": def_full}
+
+        # White-box evaluate each model: attack crafted against itself
+        for mkey, model in fold_models.items():
+            clf = attacks.wrap_cnn_for_art(
+                model, n_features=len(feature_columns), n_classes=n_classes, device=device,
+            )
+            clean_pred = clf.predict(X_te_f).argmax(axis=1)
+            clean_per = f1_score(y_te, clean_pred, average=None,
+                                 labels=range(n_classes), zero_division=0)
+            for c in range(n_classes):
+                results[mkey]["clean"][c].append(clean_per[c])
+
+            for eps in epsilons:
+                X_adv = attacks.generate_pgd(clf, X_te_f, epsilon=eps)
+                pred = clf.predict(X_adv).argmax(axis=1)
+                per = f1_score(y_te, pred, average=None,
+                               labels=range(n_classes), zero_division=0)
+                for c in range(n_classes):
+                    results[mkey][eps][c].append(per[c])
+
+        print(f"  fold {fold}/{n_splits} done")
+
+    return results

@@ -1,0 +1,95 @@
+{
+  "dataset": "ROAD",
+  "device": "cuda",
+  "n_classes": 5,
+  "class_names": [
+    "benign",
+    "fuzzing",
+    "max-speedometer",
+    "reverse-light-off",
+    "reverse-light-on"
+  ],
+  "test_size": 7972,
+  "random_forest": {
+    "accuracy": 1.0,
+    "macro_f1": 1.0,
+    "confusion_matrix": [
+      [
+        4238,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        118,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        2112,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        305,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1199
+      ]
+    ]
+  },
+  "cnn_1d": {
+    "accuracy": 0.9989964877069744,
+    "macro_f1": 0.9964051106969954,
+    "confusion_matrix": [
+      [
+        4233,
+        2,
+        0,
+        2,
+        1
+      ],
+      [
+        0,
+        118,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        2112,
+        0,
+        0
+      ],
+      [
+        3,
+        0,
+        0,
+        302,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1199
+      ]
+    ]
+  }
+}
