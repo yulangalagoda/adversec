@@ -2,20 +2,23 @@
 **/__pycache__/
 *.py[cod]
 .ipynb_checkpoints/
+.pytest_cache/
+
+# Packaging / editable installs
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+envs/
 
 # Raw and processed datasets (regenerable, large — never commit)
 datasets/raw/
 datasets/processed/
 
-# Trained models / adversarial artifacts
-models/*.pt
-models/*.pth
-models/*.pkl
-attacks/*.npy
-attacks/*.npz
-
-# Stray export/OS junk
-*.ps
-*.eps
+# OS / editor junk
 .DS_Store
 *.swp
+.vscode/

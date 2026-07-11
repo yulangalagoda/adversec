@@ -1,0 +1,18 @@
+# CICIoV2024 (decimal representation) — per-dataset settings.
+name: ciciov2024
+benign_label: benign
+id_max: 2047                      # 11-bit standard CAN arbitration ID
+cnn_class_weights: true           # CIC is severely imbalanced; the CNN baseline uses balanced weights
+raw_dir: datasets/raw/decimal     # relative to project root
+files:                            # order defines the load/concat order
+  benign: decimal_benign.csv
+  DoS: decimal_DoS.csv
+  spoofing-GAS: decimal_spoofing-GAS.csv
+  spoofing-RPM: decimal_spoofing-RPM.csv
+  spoofing-SPEED: decimal_spoofing-SPEED.csv
+  spoofing-STEERING_WHEEL: decimal_spoofing-STEERING_WHEEL.csv
+defence:                            # robust-support macro-F1 CV (base CNN / defended CNNs / RF) under PGD
+  mode: robust_support_cv
+  robust_support: [DoS, benign, spoofing-RPM]   # classes with >=2 test signatures
+  attack_eps: 0.10
+  n_splits: 2                       # GAS has only 2 signatures, so k=2 (as in the paper)

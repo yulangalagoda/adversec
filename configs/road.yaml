@@ -1,0 +1,41 @@
+# ROAD (Real ORNL Automotive Dynamometer) — per-dataset settings.
+#
+# correlated-signal is excluded: it collapses to a single unique signature under
+# strict de-duplication (fully-specified fixed payload), so it is not viable to
+# train or test. Masquerade variants are excluded: they duplicate the fabrication
+# signatures rather than adding diversity.
+name: road
+benign_label: benign
+id_max: 2047
+cnn_class_weights: false          # ROAD attacks are cleanly separable; the baseline CNN needs no weighting
+raw_dir: datasets/raw/road
+attacks_subdir: attacks
+ambient_subdir: ambient
+attack_captures:                  # clean class name -> capture files (non-masquerade)
+  max-speedometer:
+    - max_speedometer_attack_1
+    - max_speedometer_attack_2
+    - max_speedometer_attack_3
+  reverse-light-on:
+    - reverse_light_on_attack_1
+    - reverse_light_on_attack_2
+    - reverse_light_on_attack_3
+  reverse-light-off:
+    - reverse_light_off_attack_1
+    - reverse_light_off_attack_2
+    - reverse_light_off_attack_3
+  fuzzing:
+    - fuzzing_attack_1
+    - fuzzing_attack_2
+    - fuzzing_attack_3
+fuzzing_classes:                  # classes labelled by interval + all-FF payload
+  - fuzzing
+ambient_captures:                 # benign sourced from these (dyno + real road)
+  - ambient_dyno_drive_basic_long
+  - ambient_highway_street_driving_long
+ambient_sample_per_capture: 20000
+defence:                            # per-class comparison: baseline vs AT at two epsilon ranges
+  mode: perclass_comparison
+  eps_meaningful: [0.01, 0.05, 0.10]              # band where classes transition robust -> collapsed
+  eps_full: [0.01, 0.05, 0.10, 0.20, 0.30]        # full sweep, incl. high-eps examples
+  n_splits: 5
