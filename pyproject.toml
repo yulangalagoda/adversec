@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adversec"
+version = "0.1.0"
+description = "Adversarial robustness of ML-based CAN-bus intrusion detection (CICIoV2024 + ROAD)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "pyyaml",
+    "joblib",
+    "torch",
+    "adversarial-robustness-toolbox",   # the real ART; NEVER install the ascii-art "art" package
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "matplotlib", "seaborn", "jupyterlab"]
+
+[project.scripts]
+adversec = "adversec.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["adversec*"]
+
+# NOTE ON REPRODUCIBILITY
+# The committed numbers were produced with the pinned versions in requirements.txt
+# (torch 2.5.1+cu121, adversarial-robustness-toolbox 1.20.1, scikit-learn 1.8.0,
+# numpy 2.4.4, pandas 3.0.3) on an RTX 4080. Use those pins to reproduce exactly;
+# the loose ranges above are for portability.
