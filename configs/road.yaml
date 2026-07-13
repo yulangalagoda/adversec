@@ -6,7 +6,7 @@
 # signatures rather than adding diversity.
 name: road
 benign_label: benign
-id_max: 2047
+id_max: 4095                      # ROAD uses up to 12-bit IDs (0xFFF); fuzzing injects across this range
 cnn_class_weights: false          # ROAD attacks are cleanly separable; the baseline CNN needs no weighting
 raw_dir: datasets/raw/road
 attacks_subdir: attacks
