@@ -1,0 +1,85 @@
+{
+  "dataset": "road",
+  "method": "two_threat_model_averaged",
+  "description": "Robust-support macro-F1 under PGD eps=0.10, averaged over N_REPEATS seeded runs. transfer = attack crafted from the baseline CNN, fed to every model. white_box = attack crafted against the model it hits (CNN-defended only; the Random Forest has no gradients so white-box does not apply to it).",
+  "attack_eps": 0.1,
+  "n_repeats": 3,
+  "robust_support_classes": [
+    "benign",
+    "fuzzing",
+    "max-speedometer",
+    "reverse-light-off",
+    "reverse-light-on"
+  ],
+  "results": {
+    "baseline_cnn": {
+      "clean": {
+        "mean": 0.9961049225956838,
+        "std": 0.0015157737478171099,
+        "runs": [
+          0.9977713200995779,
+          0.9941039504919604,
+          0.9964394971955131
+        ]
+      },
+      "attack": {
+        "mean": 0.33999131675026245,
+        "std": 0.04625682360678652,
+        "runs": [
+          0.2889690060958948,
+          0.4009578448282854,
+          0.3300470993266071
+        ]
+      }
+    },
+    "defended_cnn": {
+      "clean": {
+        "mean": 0.9970873684774837,
+        "std": 0.0008274303974721362,
+        "runs": [
+          0.997134236698562,
+          0.99605135640877,
+          0.9980765123251192
+        ]
+      },
+      "transfer": {
+        "mean": 0.7934881102096817,
+        "std": 0.06929655515241738,
+        "runs": [
+          0.8873647149422415,
+          0.7709097369669257,
+          0.7221898787198782
+        ]
+      },
+      "white_box": {
+        "mean": 0.16161481173765277,
+        "std": 0.04117615451000631,
+        "runs": [
+          0.21761836686673414,
+          0.11979583800218699,
+          0.14743023034403718
+        ]
+      }
+    },
+    "random_forest": {
+      "clean": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "attack": {
+        "mean": 0.1387300064645479,
+        "std": 7.617257845168219e-05,
+        "runs": [
+          0.13883701883701885,
+          0.13868720806359092,
+          0.13866579249303393
+        ]
+      }
+    }
+  }
+}

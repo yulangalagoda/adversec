@@ -1,0 +1,23 @@
+{
+  "dataset": "ciciov2024",
+  "label_mapping": {
+    "0": "DoS",
+    "1": "benign",
+    "2": "spoofing-GAS",
+    "3": "spoofing-RPM",
+    "4": "spoofing-SPEED",
+    "5": "spoofing-STEERING_WHEEL"
+  },
+  "X_train_shape": [
+    3838,
+    9
+  ],
+  "X_test_shape": [
+    718,
+    9
+  ],
+  "raw_id_range": [
+    71,
+    1409
+  ]
+}

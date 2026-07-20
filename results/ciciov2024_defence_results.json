@@ -1,0 +1,83 @@
+{
+  "dataset": "ciciov2024",
+  "method": "two_threat_model_averaged",
+  "description": "Robust-support macro-F1 under PGD eps=0.10, averaged over N_REPEATS seeded runs. transfer = attack crafted from the baseline CNN, fed to every model. white_box = attack crafted against the model it hits (CNN-defended only; the Random Forest has no gradients so white-box does not apply to it).",
+  "attack_eps": 0.1,
+  "n_repeats": 3,
+  "robust_support_classes": [
+    "DoS",
+    "benign",
+    "spoofing-RPM"
+  ],
+  "results": {
+    "baseline_cnn": {
+      "clean": {
+        "mean": 0.8326266195524146,
+        "std": 0.047140452079103105,
+        "runs": [
+          0.8659599528857479,
+          0.8659599528857479,
+          0.765959952885748
+        ]
+      },
+      "attack": {
+        "mean": 0.2834182456309749,
+        "std": 0.0025638876356265717,
+        "runs": [
+          0.28594377510040164,
+          0.28440860215053765,
+          0.27990235964198534
+        ]
+      }
+    },
+    "defended_cnn": {
+      "clean": {
+        "mean": 0.8352539102343526,
+        "std": 0.03894784213135364,
+        "runs": [
+          0.7955905799942498,
+          0.8881841672539347,
+          0.8219869834548734
+        ]
+      },
+      "transfer": {
+        "mean": 0.6542107177636501,
+        "std": 0.10226359535868186,
+        "runs": [
+          0.5803506495118246,
+          0.7988221436984687,
+          0.5834593600806571
+        ]
+      },
+      "white_box": {
+        "mean": 0.24062631404753185,
+        "std": 0.03364209894640641,
+        "runs": [
+          0.2006535947712418,
+          0.23826714801444046,
+          0.2829581993569132
+        ]
+      }
+    },
+    "random_forest": {
+      "clean": {
+        "mean": 0.8558497488730047,
+        "std": 0.020951312035156995,
+        "runs": [
+          0.8854793785026344,
+          0.8410349340581899,
+          0.8410349340581899
+        ]
+      },
+      "attack": {
+        "mean": 0.30508486227974835,
+        "std": 0.018990305798911353,
+        "runs": [
+          0.33123102078953515,
+          0.29732510288065844,
+          0.2866984631690514
+        ]
+      }
+    }
+  }
+}
