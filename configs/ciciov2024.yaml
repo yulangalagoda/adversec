@@ -3,7 +3,7 @@ name: ciciov2024
 benign_label: benign
 id_max: 2047                      # 11-bit standard CAN arbitration ID
 cnn_class_weights: true           # CIC is severely imbalanced; the CNN baseline uses balanced weights
-raw_dir: datasets/raw/decimal     # relative to project root
+raw_dir: datasets/raw/ciciov2024_decimal     # relative to project root
 files:                            # order defines the load/concat order
   benign: decimal_benign.csv
   DoS: decimal_DoS.csv

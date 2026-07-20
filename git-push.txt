@@ -1,0 +1,32 @@
+git add -A
+git status
+
+git commit -m "$(cat <<'EOF'
+Strengthen defence/robustness study: fix envelope leakage, add significance
+testing, adaptive + black-box attacks, and duplication ablation
+
+- Fix train/test leakage in the per-ID envelope (threat_sizing): now learned
+  from TRAIN benign only, with a proper held-out false-positive rate reported
+  alongside the adversarial-rejection rate.
+- Add a duplication ablation for crossval_perclass_robustness (use_duplication
+  toggle) to test whether CICIoV2024's inverted distance-to-benign correlation
+  survives without the light-duplication convergence crutch (it does, at
+  reduced magnitude).
+- Bump defence N_REPEATS 3->10 and add a paired t-test (scipy.stats.ttest_rel)
+  confirming which defended-vs-undefended differences are statistically real.
+- Add an adaptive, envelope-aware attack (ID frozen, bytes clipped to that
+  ID's observed range) and a non-gradient black-box attack (HopSkipJump,
+  reduced query budget) to notebook 06.
+- Update README with confirmed findings, a Limitations section, and notebook
+  I/O documentation.
+- Untrack raw CICIoV2024 CSVs (legacy from before datasets/raw/ was
+  gitignored) following the decimal -> ciciov2024_decimal rename; raw data is
+  sourced separately per README.
+- Clear regenerated datasets/processed/ and results/ artifacts for a clean
+  end-to-end reproduction run.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+EOF
+)"
+
+git push

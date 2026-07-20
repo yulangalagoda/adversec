@@ -175,10 +175,15 @@ def crossval_perclass_robustness(
     strict_df, feature_columns, class_names,
     epsilons, attack="pgd",
     n_splits=5, dup_target=200, device="cpu", random_seed=42, cnn_epochs=50,
+    use_duplication=True,
 ):
     """
     Cross-validate PER-CLASS F1 under attack across a diversity gradient.
     Returns results[epsilon][class_index] = list of per-fold F1s (+ a "clean" key).
+
+    use_duplication=False skips the light-duplication convergence crutch entirely,
+    training on the real (unpadded) train-fold signatures only -- for ablating
+    whether a result depends on that crutch rather than on the underlying data.
     """
     n_classes = len(class_names)
     results = {"clean": [[] for _ in range(n_classes)]}
@@ -192,7 +197,10 @@ def crossval_perclass_robustness(
         train_sig = strict_df.iloc[tr_idx].reset_index(drop=True)
         test_sig = strict_df.iloc[te_idx].reset_index(drop=True)
 
-        train_dup = duplicate_train_classes(train_sig, target_per_class=dup_target, random_seed=random_seed)
+        if use_duplication:
+            train_dup = duplicate_train_classes(train_sig, target_per_class=dup_target, random_seed=random_seed)
+        else:
+            train_dup = train_sig.copy()
         y_tr, y_te, _ = encode_labels(train_dup, test_sig)
         X_tr, X_te, _ = scale_features(train_dup, test_sig, feature_columns)
 

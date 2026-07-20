@@ -127,7 +127,16 @@ def distance_to_benign(name, cv_results, class_names, sig, benign_label="benign"
 
 
 def threat_sizing(name, epsilons, device, cnn_epochs, benign_label="benign"):
-    """Integer-rounding + per-ID benign-envelope rejection, per epsilon (uses the fixed per-feature clip)."""
+    """
+    Integer-rounding + per-ID benign-envelope rejection, per epsilon (uses the fixed
+    per-feature clip).
+
+    The envelope is learned from TRAIN benign frames only. Both the adversarial-
+    rejection rate and the benign false-positive rate below are therefore measured on
+    data the envelope never saw -- building it from train+test would let the test
+    benign frames help define the envelope that then gets evaluated against them,
+    making the false-positive rate trivially optimistic.
+    """
     _, train, test, arrays, scaler, class_names = _load(name)
     cnn = _train_baseline(arrays, class_names, name, device, cnn_epochs)
     clf = attacks.wrap_cnn_for_art(cnn, n_features=len(FEATURES), n_classes=len(class_names), device=device)
@@ -135,13 +144,16 @@ def threat_sizing(name, epsilons, device, cnn_epochs, benign_label="benign"):
     X_test = arrays["X_test"].astype(np.float32)
     y_test = arrays["y_test"]
 
-    benign_all = pd.concat(
-        [train[train[LABEL_COLUMN] == benign_label], test[test[LABEL_COLUMN] == benign_label]],
-        ignore_index=True,
-    )
-    ranges = realism.learn_observed_ranges(benign_all, ID_COLUMN, DATA_COLUMNS)
+    train_benign = train[train[LABEL_COLUMN] == benign_label]
+    test_benign = test[test[LABEL_COLUMN] == benign_label]
+    ranges = realism.learn_observed_ranges(train_benign, ID_COLUMN, DATA_COLUMNS)
     id_idx = FEATURES.index(ID_COLUMN)
     data_idx = [FEATURES.index(c) for c in DATA_COLUMNS]
+
+    # False-positive rate: held-out benign TEST frames the envelope never saw.
+    benign_test_int = test_benign[FEATURES].values.astype(np.float64)
+    benign_mask = realism.observed_range_mask(benign_test_int, ranges, id_idx, data_idx)
+    benign_fp_rate = round(100.0 * (~benign_mask).sum() / len(benign_mask), 2) if len(benign_mask) else None
 
     def mf1(pred):
         return f1_score(y_test, pred, average="macro", zero_division=0)
@@ -161,12 +173,41 @@ def threat_sizing(name, epsilons, device, cnn_epochs, benign_label="benign"):
             "n_survivors": int(mask.sum()),
         })
 
+    # Adaptive, envelope-aware attacker: freeze the ID (perturb payload bytes only, so
+    # the frame keeps a real observed ID) and clip perturbed bytes into that ID's own
+    # observed range. Tests the limitation the docstring above only asserts.
+    id_frozen_mask = np.zeros(len(FEATURES), dtype=np.float32)
+    id_frozen_mask[data_idx] = 1.0
+    adaptive_rows = []
+    for eps in epsilons:
+        X_adv_id = attacks.generate_pgd(clf, X_test, epsilon=eps, mask=id_frozen_mask)
+        _, X_int_id = realism.round_to_integer_frames(X_adv_id, scaler)
+        X_int_clipped = realism.clip_to_id_envelope(X_int_id, ranges, id_idx, data_idx)
+        X_clipped_scaled = scaler.transform(X_int_clipped).astype(np.float32)
+        f1_adaptive = mf1(clf.predict(X_clipped_scaled).argmax(axis=1))
+        mask_adaptive = realism.observed_range_mask(X_int_clipped, ranges, id_idx, data_idx)
+        adaptive_rows.append({
+            "eps": eps,
+            "f1_adaptive_attack": round(float(f1_adaptive), 3),
+            "pct_rejected_by_envelope": round(100.0 * (~mask_adaptive).sum() / len(mask_adaptive), 1),
+            "n_survivors": int(mask_adaptive.sum()),
+        })
+
     return {
-        "benign_reference_frames": int(len(benign_all)),
+        "benign_reference_frames": int(len(train_benign)),
         "benign_ids": len(ranges),
         "test_frames": int(len(y_test)),
+        "benign_false_positive_rate_pct": benign_fp_rate,
+        "benign_false_positive_frames_tested": int(len(benign_mask)),
         "by_epsilon": rows,
-        "note": "per-feature integer clip (arbitration ID not crushed to a byte range)",
+        "adaptive_envelope_aware_attack": {
+            "description": (
+                "ID frozen to its real (observed) value; payload bytes perturbed by PGD "
+                "then clipped into that ID's own observed benign range before evaluation."
+            ),
+            "by_epsilon": adaptive_rows,
+        },
+        "note": "per-feature integer clip (arbitration ID not crushed to a byte range); envelope learned from TRAIN benign only",
     }
 
 

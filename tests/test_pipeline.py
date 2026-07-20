@@ -3,9 +3,9 @@ Pipeline verification (step-3 migration gate).
 
 Runs the dataset-agnostic stages on CICIoV2024 and checks every derived number
 against the committed artifacts:
-    results/stage1_audit_report.json
+    results/ciciov2024_dedup_audit.json
     datasets/processed/ciciov2024_strict.csv / _test.csv / _train_dup.csv
-    datasets/processed/stage2_arrays.npz  (+ feature_scaler / label_encoder joblib)
+    datasets/processed/ciciov2024_stage2_arrays.npz  (+ ciciov2024_feature_scaler / _label_encoder joblib)
 
 Content comparisons are order-independent (rows sorted), so they verify the
 numbers reproduce regardless of pandas/numpy row-ordering across machines.
@@ -54,24 +54,28 @@ def _sort_rows(X: np.ndarray) -> np.ndarray:
 
 
 def test_ciciov_pipeline():
-    if not (ROOT / "datasets" / "raw" / "decimal" / "decimal_benign.csv").exists():
+    if not (ROOT / "datasets" / "raw" / "ciciov2024_decimal" / "decimal_benign.csv").exists():
         print("SKIP: CIC raw not present")
         return
-    if not (RES / "stage1_audit_report.json").exists():
-        print("SKIP: committed artifacts not present")
+    if not (RES / "ciciov2024_dedup_audit.json").exists():
+        print("SKIP: committed artifacts not present (run notebook 01 / adversec prep first)")
+        return
+    if not (PROC / "ciciov2024_stage2_arrays.npz").exists():
+        print("SKIP: stage-2 arrays not present (run notebook 02 / adversec prep first)")
         return
 
-    report = json.load(open(RES / "stage1_audit_report.json"))
+    report = json.load(open(RES / "ciciov2024_dedup_audit.json"))
     ds = get_dataset("ciciov2024")
     meta = ds.meta()
     raw = ds.load()
 
     # --- audit ---
     audit = audit_duplication(raw, FEATURES + [LABEL_COLUMN])
-    assert audit["total_rows"] == report["raw"]["total_rows"]
-    assert audit["unique_signatures"] == report["raw"]["unique_signatures"]
-    assert audit["duplicate_rows"] == report["raw"]["duplicate_rows"]
-    assert audit["duplication_rate_pct"] == report["raw"]["duplication_rate_pct"]
+    committed_audit = report["duplication_audit"]
+    assert audit["total_rows"] == committed_audit["total_rows"]
+    assert audit["unique_signatures"] == committed_audit["unique_signatures"]
+    assert audit["duplicate_rows"] == committed_audit["duplicate_rows"]
+    assert audit["duplication_rate_pct"] == committed_audit["duplication_rate_pct"]
     print(f"audit ok: {audit['unique_signatures']} unique / {audit['total_rows']} rows "
           f"({audit['duplication_rate_pct']}% duplicated)")
 
@@ -84,6 +88,7 @@ def test_ciciov_pipeline():
 
     # --- split ---
     train, test = split_train_test(strict)
+    assert _counts(train) == report["train_per_class"]
     assert _counts(test) == report["test_per_class"]
     test_csv = pd.read_csv(PROC / "ciciov2024_test.csv")
     assert _canon_sorted(test).equals(_canon_sorted(test_csv))
@@ -91,22 +96,21 @@ def test_ciciov_pipeline():
 
     # --- augment (light duplication) ---
     train_dup = duplicate_train_classes(train, benign_class=meta.benign_label)
-    assert _counts(train_dup) == report["train_per_class_after_dup"]
     dup_csv = pd.read_csv(PROC / "ciciov2024_train_dup.csv")
     assert len(train_dup) == len(dup_csv)
     assert _canon_sorted(train_dup).equals(_canon_sorted(dup_csv))
-    print(f"augment ok: {len(train_dup)} rows, per-class matches, content == ciciov2024_train_dup.csv")
+    print(f"augment ok: {len(train_dup)} rows, content == ciciov2024_train_dup.csv")
 
     # --- encode + scale ---
     y_train, y_test, enc = encode_labels(train_dup, test)
     X_train, X_test, scaler = scale_features(train_dup, test, FEATURES)
-    arrays = np.load(PROC / "stage2_arrays.npz")
+    arrays = np.load(PROC / "ciciov2024_stage2_arrays.npz")
     assert X_train.shape == arrays["X_train"].shape == (len(train_dup), len(FEATURES))
     assert X_test.shape == arrays["X_test"].shape == (len(test), len(FEATURES))
 
     import joblib
-    comm_scaler = joblib.load(PROC / "feature_scaler.joblib")
-    comm_enc = joblib.load(PROC / "label_encoder.joblib")
+    comm_scaler = joblib.load(PROC / "ciciov2024_feature_scaler.joblib")
+    comm_enc = joblib.load(PROC / "ciciov2024_label_encoder.joblib")
     assert np.allclose(scaler.data_min_, comm_scaler.data_min_)
     assert np.allclose(scaler.data_max_, comm_scaler.data_max_)
     assert list(enc.classes_) == list(comm_enc.classes_)

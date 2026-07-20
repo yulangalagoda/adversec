@@ -83,7 +83,7 @@ notebook can be run on its own once its inputs exist on disk:
 | `03_baselines` | 02's arrays + encoder | `results/<name>_baseline_metrics.json` |
 | `04_adversarial_attacks` | 02's arrays + encoder, 01's `strict.csv` | `results/<name>_adversarial_results.json` (per-class PGD CV + distance-to-benign) |
 | `05_defence` | 02's arrays + encoder | `results/<name>_defence_results.json` (`two_threat_model_averaged` schema — see below) |
-| `06_threat_sizing` | 02's arrays/scaler/encoder, 01/02's `train_dup.csv`/`test.csv` | `results/<name>_adversarial_results.json` (adds `threat_sizing`; merge-safe with 04, either order) |
+| `06_threat_sizing` | 02's arrays/scaler/encoder, 01/02's `train_dup.csv`/`test.csv` | `results/<name>_adversarial_results.json` (adds `threat_sizing`, `adaptive_envelope_aware_attack`, `blackbox_hopskipjump_attack`; merge-safe with 04, either order) |
 
 Run `01` then `02` once per dataset; `03`–`06` only depend on `02`'s output, not
 on each other, so any one of them can be re-run standalone.
@@ -94,9 +94,10 @@ CV for CICIoV2024, per-class comparison for ROAD — the older design). The note
 instead treats both datasets identically: it evaluates clean / transfer-attack /
 white-box-attack robust-support macro-F1 for the baseline CNN, a PGD-adversarially-trained
 CNN, and the Random Forest, under PGD eps=0.10, averaged (mean ± std) over
-`N_REPEATS` seeded runs. This is the current, decisive result; the CLI path's
-`robust_support_cv`/`perclass_comparison` schemas predate it and are kept for the
-migration-gate tests, not as the primary defence claim.
+`N_REPEATS=10` seeded runs, plus a paired t-test (`defended[r] - baseline[r]` per seed)
+confirming which differences are real rather than noise. This is the current, decisive
+result; the CLI path's `robust_support_cv`/`perclass_comparison` schemas predate it and
+are kept for the migration-gate tests, not as the primary defence claim.
 
 ## Verify (migration gates)
 
@@ -115,10 +116,67 @@ byte range.
 
 ## Key findings
 
-- The ~99.75% duplication in CICIoV2024 inflates accuracy; on honestly
-  de-duplicated data the picture is very different (the "accuracy trap").
-- Adversarial training's benefit is contingent on data structure: it helps the
-  signature-scarce CICIoV2024 attack classes and fails/degrades on the
-  signature-rich ROAD classes.
-- A cheap per-ID envelope validator rejects most naive gradient attacks on ROAD —
-  a known constrained-domain result, not a novel defence.
+- **The accuracy trap**: ~99.75% duplication in CICIoV2024 (1,408,219 rows → 3,588
+  unique signatures) inflates accuracy; on honestly de-duplicated data both baselines'
+  macro-F1 collapses well below their near-perfect accuracy (RF: 0.997 acc / 0.776
+  macro-F1). ROAD is far less duplicated (39.8%) and its clean baselines are genuinely
+  near-perfect (RF macro-F1 = 1.0), not just accuracy-trapped.
+- **Adversarial training's benefit is contingent on data structure, confirmed by a
+  paired t-test over 10 repeats, not just by comparing means**: AT helps significantly
+  under transfer attack on both datasets (CICIoV2024: p=0.0001; ROAD: p<0.0001). Under
+  white-box attack, AT **significantly backfires on ROAD** (defended model worse than
+  the undefended baseline's own robustness, p=0.0035) but has **no significant effect
+  either way on CICIoV2024** (p=0.158) — a genuine null result, not "fails the same way."
+- **The per-ID envelope validator's rejection rate is now false-positive-audited, not
+  just asserted**: it rejects the large majority of naive PGD attacks on both datasets
+  (CICIoV2024: 100% at every epsilon tested; ROAD: 90.1–90.2%) at a low, credible
+  false-positive cost on held-out legitimate traffic (CICIoV2024: 3.2%; ROAD: 1.3%).
+  This confirms CICIoV2024's 100% figure is a real result, not an artifact of an
+  over-narrow envelope — it was checked, not assumed.
+- **The distance-to-benign robustness mechanism inverts on CICIoV2024** (pearson_r =
+  -0.59, vs +0.706 on ROAD — classes *closer* to benign are the *more* robust ones,
+  the opposite pattern to ROAD). An ablation removing the light-duplication
+  convergence crutch shows the inversion survives (r = -0.295) — same sign, roughly
+  half the magnitude — so it is a real, if amplified-by-duplication, data-structure
+  effect, not an artifact of the padding.
+- **In progress**: an adaptive envelope-aware attacker (ID frozen to a real value,
+  bytes clipped into that ID's own observed range) and a non-gradient black-box
+  attack (HopSkipJump, reduced query budget) are implemented in `notebooks/06` but
+  not yet run to completion — see [Limitations](#limitations).
+
+## Limitations
+
+- **CICIoV2024's statistical power is thin.** After strict de-duplication, 3 of 6
+  classes have exactly 1 test signature (`spoofing-GAS`, `spoofing-SPEED`,
+  `spoofing-STEERING_WHEEL`); `DoS` has 4, `spoofing-RPM` has 2. Per-class F1s and
+  the distance-to-benign correlation (n=5 classes) on this dataset should be read as
+  indicative, not statistically definitive — neither the with- nor without-duplication
+  pearson_r clears the conventional significance bar at that sample size. ROAD's
+  statistics are much better-powered (test classes range 118–4,238 signatures) and
+  should be weighted more heavily in any claim that needs to generalise.
+- **ROAD excludes masquerade attack variants and the correlated-signal attack**
+  (`configs/road.yaml`): correlated-signal collapses to a single unique signature
+  under strict dedup and isn't viable to train/test; masquerade variants duplicate
+  fabrication signatures rather than adding diversity. Masquerade attacks are
+  arguably the more realistic stealthy attack vector in the original ROAD paper, so
+  this is a real scope limitation, not just a data-cleaning convenience.
+- **Only one defence family is tested**: PGD-adversarial training, at one epsilon
+  (CICIoV2024) or two epsilon ranges (ROAD). The "AT helps here, backfires there"
+  claim is about PGD-based adversarial training specifically — it has not been
+  checked against other defence families (TRADES, randomized smoothing, certified
+  defences), so "adversarial training in general" would be an overreach of what's
+  actually been shown.
+- **`threat_sizing()` (and its adaptive/black-box extensions) is a single run, not
+  cross-validated** — unlike the per-class robustness CV or the 10-repeat defence
+  result. CUDA/cuDNN is not forced deterministic in this codebase, so re-running it
+  produces somewhat different F1s run to run (observed swings of several hundredths
+  between runs at the same epsilon). Treat single-run threat-sizing numbers as
+  approximate; the qualitative pattern (rejection rate holds across epsilon, rounding
+  doesn't recover F1) has reproduced consistently across runs even though the exact
+  decimals haven't.
+- **HopSkipJump uses a deliberately reduced query budget** (`max_iter=15,
+  max_eval=300` vs ART's defaults of `50`/`10000`) to stay tractable on more than a
+  handful of samples, and runs on a stratified subsample (≤20 signatures/class), not
+  the full test set. Its F1 is a lower bound on black-box attacker capability, not
+  an upper bound — a well-resourced attacker with the full query budget would likely
+  do better.

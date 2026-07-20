@@ -23,7 +23,7 @@ from adversec.datasets.registry import available, get_dataset      # noqa: E402
 
 
 def _has_ciciov_raw() -> bool:
-    return (ROOT / "datasets" / "raw" / "decimal" / "decimal_benign.csv").exists()
+    return (ROOT / "datasets" / "raw" / "ciciov2024_decimal" / "decimal_benign.csv").exists()
 
 
 def _has_road_raw() -> bool:
@@ -52,7 +52,7 @@ def _cross_check_against_legacy(df_new, legacy_module, loader_name):
 
 def test_ciciov():
     if not _has_ciciov_raw():
-        print("SKIP ciciov: raw decimal CSVs not present")
+        print("SKIP ciciov: raw ciciov2024_decimal CSVs not present")
         return
     ds = get_dataset("ciciov2024")
     df = ds.load()

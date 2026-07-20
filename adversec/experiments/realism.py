@@ -69,3 +69,25 @@ def observed_range_mask(X_int, ranges, id_column_index, data_column_indices):
                 plausible[row_i] = False
                 break
     return plausible
+
+
+def clip_to_id_envelope(X_int, ranges, id_column_index, data_column_indices):
+    """
+    Clip each frame's payload bytes into its OWN arbitration ID's observed [min,max]
+    range. Frames on an unknown ID are left unchanged -- there is no known range to
+    clip to, and an unknown ID alone is already a detectable injection regardless of
+    byte content.
+
+    Models an adaptive attacker who already knows the per-ID envelope and deliberately
+    stays inside it (the limitation threat_sizing() itself names but does not test).
+    """
+    X_clipped = X_int.copy()
+    for row_i in range(len(X_int)):
+        id_val = int(round(X_int[row_i, id_column_index]))
+        if id_val not in ranges:
+            continue
+        id_ranges = ranges[id_val]
+        for col_name, col_idx in zip(id_ranges.keys(), data_column_indices):
+            lo, hi = id_ranges[col_name]
+            X_clipped[row_i, col_idx] = np.clip(X_clipped[row_i, col_idx], lo, hi)
+    return X_clipped
