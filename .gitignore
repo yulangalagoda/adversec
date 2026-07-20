@@ -14,9 +14,8 @@ dist/
 venv/
 envs/
 
-# Raw and processed datasets (regenerable, large — never commit)
+# Raw datasets (multi-GB, sourced separately — never commit)
 datasets/raw/
-datasets/processed/
 
 # OS / editor junk
 .DS_Store

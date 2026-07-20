@@ -25,6 +25,8 @@ adversec/
 ├── evaluation.py        shared metrics (macro-F1, robust-support, per-class)
 └── cli.py               entry point
 configs/                 ciciov2024.yaml, road.yaml   (paths, class maps, defence shape)
+notebooks/               01..06, step-by-step drivers; each stage saves its own results/*.json
+results/                 citable JSON reports, one file per stage per dataset (tracked in git)
 tests/                   migration gates (numbers must reproduce the committed artifacts)
 ```
 
@@ -41,11 +43,15 @@ library) — it shadows the Adversarial Robustness Toolbox and breaks imports.
 
 ## Data
 
-- **CICIoV2024** (decimal): six per-class CSVs in `datasets/raw/decimal/`.
+- **CICIoV2024** (decimal): six per-class CSVs in `datasets/raw/ciciov2024_decimal/`.
 - **ROAD**: candump captures under `datasets/raw/road/` (`ambient/`, `attacks/` +
   `capture_metadata.json`).
 
-Raw data and large artifacts are gitignored (regenerable).
+Raw data is gitignored — it's multi-GB (ROAD raw alone is ~3GB) and must be
+sourced separately, placed under `datasets/raw/`. `datasets/processed/` (the
+output of notebooks 01+02, or `adversec prep`) is small (~8MB total) and **is**
+tracked in git, so notebooks 03–06 can run on a fresh clone without needing the
+raw data at all.
 
 ## Reproduce
 
@@ -58,8 +64,39 @@ adversec attack   --dataset road --device cuda    # CV per-class robustness + di
 adversec defend   --dataset road --device cuda    # defended-model cross-validation
 ```
 
-The defence stage shape is per dataset (declared in `configs/*.yaml`):
-robust-support CV for CICIoV2024, per-class comparison for ROAD.
+`adversec defend` runs the per-dataset-shaped comparison declared in
+`configs/*.yaml` (robust-support CV for CICIoV2024, per-class comparison for
+ROAD). `notebooks/05_defence` runs a different, newer methodology instead — see
+[Notebooks](#notebooks) below — so the two paths are not interchangeable and
+currently produce different `<name>_defence_results.json` schemas.
+
+## Notebooks
+
+`notebooks/01..06` are step-by-step drivers over the same package code as the CLI,
+meant for interactive/report use. Each stage saves a citable artifact, so any
+notebook can be run on its own once its inputs exist on disk:
+
+| Notebook | Reads | Saves |
+|---|---|---|
+| `01_cleaning` | raw data | `<name>_{strict,train,test}.csv`, `results/<name>_dedup_audit.json` |
+| `02_preprocessing` | 01's `train.csv`/`test.csv` | `<name>_stage2_arrays.npz`, `<name>_train_dup.csv`, scaler/encoder, `<name>_prep_summary.json` |
+| `03_baselines` | 02's arrays + encoder | `results/<name>_baseline_metrics.json` |
+| `04_adversarial_attacks` | 02's arrays + encoder, 01's `strict.csv` | `results/<name>_adversarial_results.json` (per-class PGD CV + distance-to-benign) |
+| `05_defence` | 02's arrays + encoder | `results/<name>_defence_results.json` (`two_threat_model_averaged` schema — see below) |
+| `06_threat_sizing` | 02's arrays/scaler/encoder, 01/02's `train_dup.csv`/`test.csv` | `results/<name>_adversarial_results.json` (adds `threat_sizing`; merge-safe with 04, either order) |
+
+Run `01` then `02` once per dataset; `03`–`06` only depend on `02`'s output, not
+on each other, so any one of them can be re-run standalone.
+
+**`05_defence`'s methodology differs from `adversec defend`.** The CLI/`experiments/defended.py`
+path runs the per-dataset-shaped comparison from `configs/*.yaml` (robust-support
+CV for CICIoV2024, per-class comparison for ROAD — the older design). The notebook
+instead treats both datasets identically: it evaluates clean / transfer-attack /
+white-box-attack robust-support macro-F1 for the baseline CNN, a PGD-adversarially-trained
+CNN, and the Random Forest, under PGD eps=0.10, averaged (mean ± std) over
+`N_REPEATS` seeded runs. This is the current, decisive result; the CLI path's
+`robust_support_cv`/`perclass_comparison` schemas predate it and are kept for the
+migration-gate tests, not as the primary defence claim.
 
 ## Verify (migration gates)
 

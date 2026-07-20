@@ -19,7 +19,7 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DATA_DIR = PROJECT_ROOT / "datasets"
-PROCESSED_DIR = DATA_DIR / "processed"     # prep artifacts: <name>_strict.csv, _stage2_arrays.npz, ...
+PROCESSED_DIR = DATA_DIR / "processed"     # prep artifacts: <name>_strict.csv, _stage2_arrays.npz, ... (tracked in git)
 RESULTS_DIR = PROJECT_ROOT / "results"     # citable JSON reports (tracked in git)
 CONFIGS_DIR = PROJECT_ROOT / "configs"
 
