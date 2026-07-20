@@ -108,7 +108,7 @@ def distance_to_benign(name, cv_results, class_names, sig, benign_label="benign"
         d, _ = nn.kneighbors(scaled(atk))
         d = d.ravel()
         per_class[cname] = {
-            "signatures": sig.get(cname, 0),
+            "signatures": int(sig.get(cname, 0)),
             "mean_distance": round(float(d.mean()), 4),
             "median_distance": round(float(np.median(d)), 4),
             "robustness_at_0.01": round(rob[cname], 3),
