@@ -1,0 +1,578 @@
+{
+  "dataset": "ciciov2024",
+  "device": "cuda",
+  "attack_config": {
+    "pgd_epsilon_sweep": [
+      0.01,
+      0.05,
+      0.1,
+      0.2,
+      0.3
+    ],
+    "pgd_step_size": 0.01,
+    "pgd_max_iter": 40,
+    "n_folds": 5,
+    "seed": 42
+  },
+  "cross_validated_per_class_pgd": {
+    "DoS": {
+      "signatures": 21,
+      "by_epsilon": {
+        "clean": {
+          "mean": 0.9555555555555555,
+          "std": 0.054433105395181765,
+          "folds": [
+            1.0,
+            0.8888888888888888,
+            1.0,
+            0.8888888888888888,
+            1.0
+          ]
+        },
+        "0.01": {
+          "mean": 0.9555555555555555,
+          "std": 0.054433105395181765,
+          "folds": [
+            1.0,
+            0.8888888888888888,
+            1.0,
+            0.8888888888888888,
+            1.0
+          ]
+        },
+        "0.05": {
+          "mean": 0.33980952380952384,
+          "std": 0.3526446375075223,
+          "folds": [
+            0.0,
+            0.08,
+            0.3333333333333333,
+            0.2857142857142857,
+            1.0
+          ]
+        },
+        "0.1": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.2": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.3": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "benign": {
+      "signatures": 3547,
+      "by_epsilon": {
+        "clean": {
+          "mean": 0.9990123942022209,
+          "std": 0.0008466621011127527,
+          "folds": [
+            0.9985915492957746,
+            1.0,
+            0.998587570621469,
+            1.0,
+            0.9978828510938603
+          ]
+        },
+        "0.01": {
+          "mean": 0.9984482166424506,
+          "std": 0.0008226316709201273,
+          "folds": [
+            0.9978888106966924,
+            1.0,
+            0.9978798586572438,
+            0.998589562764457,
+            0.9978828510938603
+          ]
+        },
+        "0.05": {
+          "mean": 0.878089183577727,
+          "std": 0.019010274618523875,
+          "folds": [
+            0.8682539682539683,
+            0.895800933125972,
+            0.8944099378881988,
+            0.8864526233359437,
+            0.8455284552845529
+          ]
+        },
+        "0.1": {
+          "mean": 0.8282518885494025,
+          "std": 0.04456361359525005,
+          "folds": [
+            0.8673550436854647,
+            0.8635275339185954,
+            0.8234323432343235,
+            0.8420195439739414,
+            0.7449249779346867
+          ]
+        },
+        "0.2": {
+          "mean": 0.5840753294504875,
+          "std": 0.14691217853835056,
+          "folds": [
+            0.5913555992141454,
+            0.3325526932084309,
+            0.5941176470588235,
+            0.7935702199661591,
+            0.608780487804878
+          ]
+        },
+        "0.3": {
+          "mean": 0.4315010768267298,
+          "std": 0.27638317316772104,
+          "folds": [
+            0.05953991880920163,
+            0.15938303341902313,
+            0.5830039525691699,
+            0.7901861252115059,
+            0.5653923541247485
+          ]
+        }
+      }
+    },
+    "spoofing-GAS": {
+      "signatures": 2,
+      "by_epsilon": {
+        "clean": {
+          "mean": 0.4,
+          "std": 0.48989794855663565,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ]
+        },
+        "0.01": {
+          "mean": 0.4,
+          "std": 0.48989794855663565,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ]
+        },
+        "0.05": {
+          "mean": 0.2,
+          "std": 0.4,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ]
+        },
+        "0.1": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.2": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.3": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "spoofing-RPM": {
+      "signatures": 10,
+      "by_epsilon": {
+        "clean": {
+          "mean": 0.5476190476190477,
+          "std": 0.32296809443453656,
+          "folds": [
+            0.0,
+            1.0,
+            0.5714285714285714,
+            0.6666666666666666,
+            0.5
+          ]
+        },
+        "0.01": {
+          "mean": 0.5333333333333333,
+          "std": 0.32317865716108857,
+          "folds": [
+            0.0,
+            1.0,
+            0.5,
+            0.6666666666666666,
+            0.5
+          ]
+        },
+        "0.05": {
+          "mean": 0.37642857142857145,
+          "std": 0.15830092758246678,
+          "folds": [
+            0.2857142857142857,
+            0.5,
+            0.5714285714285714,
+            0.4,
+            0.125
+          ]
+        },
+        "0.1": {
+          "mean": 0.09027777777777776,
+          "std": 0.08979572152913674,
+          "folds": [
+            0.2222222222222222,
+            0.0,
+            0.0625,
+            0.16666666666666666,
+            0.0
+          ]
+        },
+        "0.2": {
+          "mean": 0.001646090534979424,
+          "std": 0.0032921810699588485,
+          "folds": [
+            0.00823045267489712,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.3": {
+          "mean": 0.0007797270955165692,
+          "std": 0.0015594541910331381,
+          "folds": [
+            0.003898635477582846,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "spoofing-SPEED": {
+      "signatures": 5,
+      "by_epsilon": {
+        "clean": {
+          "mean": 0.6666666666666666,
+          "std": 0.36514837167011077,
+          "folds": [
+            0.6666666666666666,
+            1.0,
+            0.0,
+            1.0,
+            0.6666666666666666
+          ]
+        },
+        "0.01": {
+          "mean": 0.7333333333333333,
+          "std": 0.38873012632302,
+          "folds": [
+            1.0,
+            1.0,
+            0.0,
+            1.0,
+            0.6666666666666666
+          ]
+        },
+        "0.05": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.1": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.2": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.3": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    "spoofing-STEERING_WHEEL": {
+      "signatures": 3,
+      "by_epsilon": {
+        "clean": {
+          "mean": 0.3333333333333333,
+          "std": 0.42163702135578396,
+          "folds": [
+            0.6666666666666666,
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.01": {
+          "mean": 0.3333333333333333,
+          "std": 0.42163702135578396,
+          "folds": [
+            0.6666666666666666,
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.05": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.1": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.2": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "0.3": {
+          "mean": 0.0,
+          "std": 0.0,
+          "folds": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  },
+  "mechanism_distance_to_benign": {
+    "reference_pool": "training benign signatures",
+    "epsilon_for_robustness": 0.01,
+    "per_class": {
+      "DoS": {
+        "signatures": 21,
+        "mean_distance": 0.232,
+        "median_distance": 0.232,
+        "robustness_at_0.01": 0.956
+      },
+      "spoofing-GAS": {
+        "signatures": 2,
+        "mean_distance": 0.6661,
+        "median_distance": 0.6661,
+        "robustness_at_0.01": 0.4
+      },
+      "spoofing-RPM": {
+        "signatures": 10,
+        "mean_distance": 0.6219,
+        "median_distance": 0.6219,
+        "robustness_at_0.01": 0.533
+      },
+      "spoofing-SPEED": {
+        "signatures": 5,
+        "mean_distance": 0.209,
+        "median_distance": 0.209,
+        "robustness_at_0.01": 0.733
+      },
+      "spoofing-STEERING_WHEEL": {
+        "signatures": 3,
+        "mean_distance": 0.3082,
+        "median_distance": 0.3082,
+        "robustness_at_0.01": 0.333
+      }
+    },
+    "pearson_r": -0.574,
+    "n_classes": 5
+  },
+  "threat_sizing": {
+    "benign_reference_frames": 2838,
+    "benign_ids": 58,
+    "test_frames": 718,
+    "benign_false_positive_rate_pct": 3.24,
+    "benign_false_positive_frames_tested": 709,
+    "by_epsilon": [
+      {
+        "eps": 0.01,
+        "f1_raw_adversarial": 0.661,
+        "f1_rounded_integer": 0.661,
+        "pct_rejected_by_envelope": 100.0,
+        "n_survivors": 0
+      },
+      {
+        "eps": 0.05,
+        "f1_raw_adversarial": 0.494,
+        "f1_rounded_integer": 0.492,
+        "pct_rejected_by_envelope": 100.0,
+        "n_survivors": 0
+      },
+      {
+        "eps": 0.1,
+        "f1_raw_adversarial": 0.144,
+        "f1_rounded_integer": 0.144,
+        "pct_rejected_by_envelope": 100.0,
+        "n_survivors": 0
+      },
+      {
+        "eps": 0.2,
+        "f1_raw_adversarial": 0.093,
+        "f1_rounded_integer": 0.093,
+        "pct_rejected_by_envelope": 100.0,
+        "n_survivors": 0
+      },
+      {
+        "eps": 0.3,
+        "f1_raw_adversarial": 0.092,
+        "f1_rounded_integer": 0.092,
+        "pct_rejected_by_envelope": 100.0,
+        "n_survivors": 0
+      }
+    ],
+    "note": "per-feature integer clip (arbitration ID not crushed to a byte range); envelope learned from TRAIN benign only"
+  },
+  "adaptive_envelope_aware_attack": {
+    "description": "ID frozen to its real (observed) value; payload bytes perturbed by PGD then clipped into that ID's own observed benign range before evaluation.",
+    "by_epsilon": [
+      {
+        "eps": 0.01,
+        "f1_adaptive_attack": 0.676,
+        "pct_rejected_by_envelope": 2.9,
+        "n_survivors": 697
+      },
+      {
+        "eps": 0.05,
+        "f1_adaptive_attack": 0.512,
+        "pct_rejected_by_envelope": 2.9,
+        "n_survivors": 697
+      },
+      {
+        "eps": 0.1,
+        "f1_adaptive_attack": 0.3,
+        "pct_rejected_by_envelope": 2.9,
+        "n_survivors": 697
+      },
+      {
+        "eps": 0.2,
+        "f1_adaptive_attack": 0.207,
+        "pct_rejected_by_envelope": 2.9,
+        "n_survivors": 697
+      },
+      {
+        "eps": 0.3,
+        "f1_adaptive_attack": 0.195,
+        "pct_rejected_by_envelope": 2.9,
+        "n_survivors": 697
+      }
+    ]
+  },
+  "blackbox_hopskipjump_attack": {
+    "n_samples": 29,
+    "max_per_class": 20,
+    "hopskipjump_budget": {
+      "max_iter": 15,
+      "max_eval": 300,
+      "init_eval": 30,
+      "init_size": 30
+    },
+    "clean_f1": 0.755,
+    "hopskipjump_f1": 0.067,
+    "hopskipjump_mean_l2_perturbation": 0.2709,
+    "hopskipjump_pct_rejected_by_envelope": 86.2,
+    "pgd_eps010_f1_same_subsample": 0.184
+  }
+}

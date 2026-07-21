@@ -1,0 +1,80 @@
+{
+  "dataset": "ciciov2024",
+  "purpose": "Tests whether the distance-to-benign / robustness correlation inversion seen on CICIoV2024 (pearson_r negative, opposite sign to ROAD) survives without the light-duplication convergence crutch (train classes below 200 signatures are padded by repeating real rows), or is an artifact of it.",
+  "with_duplication": {
+    "reference_pool": "training benign signatures",
+    "epsilon_for_robustness": 0.01,
+    "per_class": {
+      "DoS": {
+        "signatures": 21,
+        "mean_distance": 0.232,
+        "median_distance": 0.232,
+        "robustness_at_0.01": 0.956
+      },
+      "spoofing-GAS": {
+        "signatures": 2,
+        "mean_distance": 0.6661,
+        "median_distance": 0.6661,
+        "robustness_at_0.01": 0.4
+      },
+      "spoofing-RPM": {
+        "signatures": 10,
+        "mean_distance": 0.6219,
+        "median_distance": 0.6219,
+        "robustness_at_0.01": 0.533
+      },
+      "spoofing-SPEED": {
+        "signatures": 5,
+        "mean_distance": 0.209,
+        "median_distance": 0.209,
+        "robustness_at_0.01": 0.733
+      },
+      "spoofing-STEERING_WHEEL": {
+        "signatures": 3,
+        "mean_distance": 0.3082,
+        "median_distance": 0.3082,
+        "robustness_at_0.01": 0.333
+      }
+    },
+    "pearson_r": -0.574,
+    "n_classes": 5
+  },
+  "without_duplication": {
+    "reference_pool": "training benign signatures",
+    "epsilon_for_robustness": 0.01,
+    "per_class": {
+      "DoS": {
+        "signatures": 21,
+        "mean_distance": 0.232,
+        "median_distance": 0.232,
+        "robustness_at_0.01": 0.956
+      },
+      "spoofing-GAS": {
+        "signatures": 2,
+        "mean_distance": 0.6661,
+        "median_distance": 0.6661,
+        "robustness_at_0.01": 0.4
+      },
+      "spoofing-RPM": {
+        "signatures": 10,
+        "mean_distance": 0.6219,
+        "median_distance": 0.6219,
+        "robustness_at_0.01": 0.484
+      },
+      "spoofing-SPEED": {
+        "signatures": 5,
+        "mean_distance": 0.209,
+        "median_distance": 0.209,
+        "robustness_at_0.01": 0.333
+      },
+      "spoofing-STEERING_WHEEL": {
+        "signatures": 3,
+        "mean_distance": 0.3082,
+        "median_distance": 0.3082,
+        "robustness_at_0.01": 0.333
+      }
+    },
+    "pearson_r": -0.26,
+    "n_classes": 5
+  }
+}

@@ -29,7 +29,9 @@ class CNN1D(nn.Module):
 
     def forward(self, x):
         # x arrives as (batch, n_features); Conv1d needs (batch, channels, length).
-        x = x.unsqueeze(1)
+        # Cast defensively: ART's HopSkipJump binary search upcasts samples to
+        # float64 internally, which would otherwise mismatch the float32 weights.
+        x = x.float().unsqueeze(1)
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
         x = x.flatten(start_dim=1)
