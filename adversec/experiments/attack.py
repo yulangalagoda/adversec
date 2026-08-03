@@ -41,11 +41,19 @@ def generate_fgsm(classifier, X, epsilon, mask=None):
     return attack.generate(x=X, mask=mask) if mask is not None else attack.generate(x=X)
 
 
-def generate_pgd(classifier, X, epsilon, step_size=None, max_iter=None, mask=None):
-    """PGD adversarial examples from X (step size and iterations default from config)."""
+def generate_pgd(classifier, X, epsilon, step_size=None, max_iter=None, mask=None, verbose=True):
+    """PGD adversarial examples from X (step size and iterations default from config).
+
+    verbose=False disables ART's per-call progress bar -- which renders as a live
+    Jupyter WIDGET, not text, so it is NOT caught by redirecting stdout. Left True
+    by default (harmless when this is called a handful of times, e.g. eval-time
+    attacks or the static AT trainset build); pass False for any caller that calls
+    this per-batch/per-step inside a loop, or the notebook frontend will eventually
+    buckle under the widget count (this is what happened during Madry AT training).
+    """
     step = config.PGD_STEP_SIZE if step_size is None else step_size
     iters = config.PGD_MAX_ITER if max_iter is None else max_iter
-    attack = ProjectedGradientDescent(estimator=classifier, eps=epsilon, eps_step=step, max_iter=iters)
+    attack = ProjectedGradientDescent(estimator=classifier, eps=epsilon, eps_step=step, max_iter=iters, verbose=verbose)
     X = X.astype(np.float32)
     return attack.generate(x=X, mask=mask) if mask is not None else attack.generate(x=X)
 

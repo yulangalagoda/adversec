@@ -74,19 +74,26 @@ other, that relationship runs backwards. That reversal is then tested for robust
 itself, by re-running the same measurement with the class-padding step (Step 4)
 switched off, to check the reversal isn't just an artefact of the padding.
 
-### Step 10 — Train a defended model and test it under two threat models
-A second neural network is trained the same way as the baseline, then made "defended"
-by additionally training on adversarial examples crafted from the *undefended* baseline
-(so it never stops learning clean traffic too). Its robustness is then measured under
-two different assumptions about the attacker:
+### Step 10 — Train a defended model, two different ways, and test both under two threat models
+A second neural network is trained the same way as the baseline, then made "defended" —
+tried two different ways:
+- **Static**: additionally trained on a fixed batch of adversarial examples crafted
+  *once*, from the *undefended* baseline, before training starts.
+- **Iterative (Madry-style)**: adversarial examples are crafted fresh, every single
+  training batch, against whatever the model's weights happen to be *at that moment* —
+  a moving target, rather than a fixed one.
+
+Both defended models are then measured under two different assumptions about the
+attacker:
 - **Transfer**: the attacker only ever sees the undefended baseline model.
 - **White-box**: the attacker has full access to the defended model itself — the worst
   case.
 
 This whole training-and-testing cycle is repeated many times over different random
-seeds, and a paired statistical test is used to check whether the defended model's
+seeds, and a paired statistical test is used to check whether each defended model's
 apparent improvement (or harm) is real, rather than random noise from one lucky or
-unlucky training run.
+unlucky training run — including a direct statistical comparison between the two
+defence recipes themselves, not just each against the undefended baseline.
 
 ### Step 11 — Test whether the attacks are physically real
 An adversarial example only matters if it corresponds to a frame a real attacker could
@@ -175,7 +182,7 @@ correctness in the abstract sense.
 
 This project asks one question: **does training a model to resist adversarial
 attacks actually help it, in a real intrusion-detection setting on a car's internal
-network — and does the answer depend on what the training data looks like?**
+network — and does the answer depend on how that training is actually done?**
 
 To find out, two publicly available CAN-bus attack datasets are run through the exact
 same code, so any difference in the result is a difference in the *data*, not in how
@@ -192,24 +199,31 @@ case), and separately assuming the attacker only knows a *different* copy of the
 model at all and can only watch what it predicts.
 
 One dataset's attacks are numerous and varied; the other's are scarce, with some attack
-types having only a handful of genuine real-world examples to learn from at all. The
-central finding is that **training the model against adversarial examples ahead of
-time helps a lot against an attacker who doesn't have access to the exact deployed
-model, on both datasets — but against an attacker who does have that access, it
-actively makes things worse on the data-rich dataset, while making no real difference
-either way on the data-scarce one.** In other words, this particular defence isn't
-universally good or bad — whether it helps depends on how much genuine attack data
-existed to learn from in the first place, and how sophisticated the attacker is assumed
-to be.
+types having only a handful of genuine real-world examples to learn from at all. Training
+the model against adversarial examples ahead of time consistently helps a lot against an
+attacker who doesn't have access to the exact deployed model, on both datasets — but the
+picture under an attacker who *does* have that access (the worst case) turns out to
+depend entirely on **how** the training was done, not on which dataset it was: trained
+the cheap, common way (against a fixed batch of adversarial examples crafted once,
+upfront), the defence gives no real benefit on the data-scarce dataset and actively makes
+things worse on the data-rich one. Trained the more expensive, textbook-correct way
+(regenerating fresh adversarial examples every single training batch, against whatever
+the model currently is), the defence delivers a real, statistically confirmed
+improvement against that worst-case attacker — **on both datasets.** So this particular
+defence isn't unreliable because of what data it's given; it's unreliable when it's
+implemented the cheap way, and that's fixable.
 
 Separately, the project tests a much simpler, non-machine-learning defence: since a
 car's internal network has fairly predictable, repetitive legitimate traffic, a cheap
 check can flag any frame whose values fall outside what's normally ever been seen for
 that specific message type. This turns out to catch the large majority of attacks
 crafted by standard methods, at a low and measured cost in false alarms on genuine
-traffic — and the project also tests whether a smarter attacker, one who already knows
-about this check and deliberately avoids tripping it, or one who never needed gradient
-access to begin with, can still get past it.
+traffic. But it's much less effective against a smarter attacker: one who already knows
+about the check and deliberately keeps a legitimate-looking ID while staying within
+its normal byte range gets through the vast majority of the time, and one who never
+needed access to the model's internals at all (only its predictions) can still do
+serious damage — sometimes more than a "stronger," fully-informed attacker who ignores
+the check entirely.
 
 Altogether, the project isn't just "here's a model, here's its accuracy" — it's a
 structured investigation into *when* a particular defence works, *why* it works or

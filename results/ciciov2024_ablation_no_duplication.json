@@ -27,7 +27,7 @@
         "signatures": 5,
         "mean_distance": 0.209,
         "median_distance": 0.209,
-        "robustness_at_0.01": 0.733
+        "robustness_at_0.01": 0.667
       },
       "spoofing-STEERING_WHEEL": {
         "signatures": 3,
@@ -36,7 +36,7 @@
         "robustness_at_0.01": 0.333
       }
     },
-    "pearson_r": -0.574,
+    "pearson_r": -0.531,
     "n_classes": 5
   },
   "without_duplication": {
@@ -59,13 +59,13 @@
         "signatures": 10,
         "mean_distance": 0.6219,
         "median_distance": 0.6219,
-        "robustness_at_0.01": 0.484
+        "robustness_at_0.01": 0.536
       },
       "spoofing-SPEED": {
         "signatures": 5,
         "mean_distance": 0.209,
         "median_distance": 0.209,
-        "robustness_at_0.01": 0.333
+        "robustness_at_0.01": 0.467
       },
       "spoofing-STEERING_WHEEL": {
         "signatures": 3,
@@ -74,7 +74,7 @@
         "robustness_at_0.01": 0.333
       }
     },
-    "pearson_r": -0.26,
+    "pearson_r": -0.348,
     "n_classes": 5
   }
 }

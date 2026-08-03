@@ -21,3 +21,6 @@ datasets/raw/
 .DS_Store
 *.swp
 .vscode/
+
+# Local scratch files, not for the repo
+git-push.txt

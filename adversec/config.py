@@ -39,6 +39,16 @@ FGSM_EPSILONS = [0.01, 0.05, 0.10, 0.20, 0.30]
 PGD_STEP_SIZE = 0.01
 PGD_MAX_ITER = 40
 
+# --- Madry-style (true min-max) adversarial training ---
+# Inner-loop PGD steps used WHILE TRAINING, crafted fresh against the model's
+# current weights every batch. Deliberately lower than PGD_MAX_ITER (used to
+# evaluate robustness afterwards): Madry et al. (2018) use fewer steps at
+# train time than test time to keep the inner loop tractable (7 for CIFAR-10),
+# then verify with a stronger attack budget at evaluation. The eval-time PGD
+# attack used to measure white-box robustness is unchanged (PGD_MAX_ITER, 40).
+MADRY_TRAIN_EPSILON = 0.10
+MADRY_TRAIN_MAX_ITER = 7
+
 
 def load_dataset_config(name: str) -> dict:
     """Read configs/<name>.yaml into a plain dict."""
