@@ -15,14 +15,21 @@ from .crossval import (
     crossval_signature_level,
 )
 from .defended import run_defended
-from .defense import adversarial_train_cnn, build_adversarial_trainset
-from .realism import clip_to_id_envelope, learn_observed_ranges, observed_range_mask, round_to_integer_frames
+from .defense import adversarial_train_cnn, build_adversarial_trainset, madry_adversarial_train_cnn
+from .realism import (
+    clip_to_id_envelope,
+    envelope_detector_report,
+    learn_observed_ranges,
+    observed_range_mask,
+    round_to_integer_frames,
+)
 
 __all__ = [
     "run_baseline", "run_adversarial", "run_defended",
     "wrap_cnn_for_art", "generate_fgsm", "generate_pgd", "generate_hopskipjump",
-    "build_adversarial_trainset", "adversarial_train_cnn",
+    "build_adversarial_trainset", "adversarial_train_cnn", "madry_adversarial_train_cnn",
     "round_to_integer_frames", "learn_observed_ranges", "observed_range_mask", "clip_to_id_envelope",
+    "envelope_detector_report",
     "crossval_rowlevel", "crossval_signature_level", "crossval_defended",
     "crossval_perclass_robustness", "crossval_defence_comparison",
 ]

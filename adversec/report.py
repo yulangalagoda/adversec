@@ -140,7 +140,12 @@ def plot_distance_mechanism(name: str):
                     fontsize=8, xytext=(4, 4), textcoords="offset points")
     ax.set_xlabel("mean L2 distance to nearest benign")
     ax.set_ylabel("robustness @ eps=0.01")
-    ax.set_title(f"{name}: robustness tracks distance-to-benign  (r={m['pearson_r']})")
+    # The sign is the finding: it is POSITIVE on ROAD and NEGATIVE on CICIoV2024, so the
+    # title must not assert one direction for both. n is 4-5 classes either way, so this
+    # is labelled exploratory rather than as an established relationship.
+    r = m["pearson_r"]
+    direction = "robustness rises with distance" if r > 0 else "robustness falls with distance (inverted)"
+    ax.set_title(f"{name}: {direction}\n(exploratory, r={r}, n={m['n_classes']} classes)", fontsize=10)
     fig.tight_layout()
     return fig
 
@@ -177,14 +182,64 @@ def plot_threat_sizing(name: str):
 
 
 def plot_defence(name: str):
-    """Defended-model results. robust_support_cv -> grouped bars; perclass_comparison -> per-class lines."""
+    """
+    Defended-model results.
+
+    Handles all three schemas that can appear in <name>_defence_results.json:
+      - "two_threat_model_averaged" (notebook 05, the CURRENT decisive result): grouped
+        bars for baseline / static AT / Madry AT / RF across clean, transfer, white-box.
+      - "robust_support_cv" and "perclass_comparison" (the older CLI `adversec defend`
+        shapes, kept for the migration-gate tests).
+
+    The notebook-05 file has no "mode" key -- it has "method" -- so dispatch on whichever
+    is present rather than assuming one. (Reading d["mode"] unconditionally is what used
+    to raise KeyError on every current results file.)
+    """
     d = load_results(name, "defence_results")
     if d is None:
-        print(f"[{name}] defence_results.json absent (run: adversec defend --dataset {name})")
+        print(f"[{name}] defence_results.json absent (run notebook 05, or: adversec defend --dataset {name})")
         return None
     import matplotlib.pyplot as plt
 
-    if d["mode"] == "robust_support_cv":
+    mode = d.get("mode") or d.get("method")
+
+    if mode == "two_threat_model_averaged":
+        res = d["results"]
+        madry = d.get("defended_cnn_madry")
+        # (label, clean, transfer/attack, white-box or None)
+        series = [
+            ("baseline CNN", res["baseline_cnn"]["clean"], res["baseline_cnn"]["attack"], res["baseline_cnn"]["attack"]),
+            ("static AT", res["defended_cnn"]["clean"], res["defended_cnn"]["transfer"], res["defended_cnn"]["white_box"]),
+        ]
+        if madry:
+            series.append(("Madry AT", madry["clean"], madry["transfer"], madry["white_box"]))
+        series.append(("Random Forest", res["random_forest"]["clean"], res["random_forest"]["attack"], None))
+
+        labels = [s[0] for s in series]
+        x = np.arange(len(series))
+        w = 0.27
+        fig, ax = plt.subplots(figsize=(8.5, 4.6))
+        for off, idx, lab, col in [(-w, 1, "clean", "#B0B0B0"),
+                                   (0.0, 2, "transfer", "#4C78A8"),
+                                   (w, 3, "white-box", "#E45756")]:
+            means = [(s[idx]["mean"] if s[idx] else np.nan) for s in series]
+            errs = [(s[idx]["std"] if s[idx] else 0.0) for s in series]
+            ax.bar(x + off, means, w, yerr=errs, capsize=3, label=lab, color=col)
+        # Mark the cells that do not exist (RF has no gradients -> no white-box).
+        for i, s in enumerate(series):
+            if s[3] is None:
+                ax.text(i + w, 0.02, "n/a", ha="center", va="bottom", fontsize=8, color="#666")
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=9)
+        ax.set_ylabel("robust-support macro-F1")
+        ax.set_ylim(0, 1.05)
+        ax.set_title(f"{name}: defence under two threat models "
+                     f"(PGD eps={d['attack_eps']}, mean±std over {d['n_repeats']} repeats)", fontsize=10)
+        ax.legend(fontsize=8)
+        fig.tight_layout()
+        return fig
+
+    if mode == "robust_support_cv":
         res = d["results"]
         models = [("base", "base"), ("def PGD", "pgd"), ("def multi", "multi"), ("RF", "rf")]
         clean = [res[f"{k}_clean"]["mean"] for _, k in models]
@@ -204,7 +259,7 @@ def plot_defence(name: str):
         fig.tight_layout()
         return fig
 
-    if d["mode"] == "perclass_comparison":
+    if mode == "perclass_comparison":
         res = d["results"]
         classes = d["class_names"]
         eps = _eps_order(res["baseline"])
@@ -223,5 +278,60 @@ def plot_defence(name: str):
         fig.tight_layout()
         return fig
 
-    print(f"[{name}] unknown defence mode {d['mode']!r}")
+    print(f"[{name}] unknown defence mode/method {mode!r}")
     return None
+
+
+def plot_attack_grid(name: str):
+    """
+    The notebook-07 grid: every attack x model cell as grouped bars, so the question the
+    grid exists to answer -- does the defence ranking depend on which attack is used? --
+    is readable at a glance.
+
+    HopSkipJump is drawn from `blackbox_hopskipjump_direct` (a black-box attack crafted
+    directly against each model), not from `grid`, and is hatched because it is measured
+    on a stratified subsample rather than the full test set.
+    """
+    d = load_results(name, "attack_grid_results")
+    if d is None:
+        print(f"[{name}] attack_grid_results.json absent (run notebook 07)")
+        return None
+    import matplotlib.pyplot as plt
+
+    models = ["baseline", "static", "madry", "rf"]
+    pretty = {"baseline": "baseline", "static": "static AT", "madry": "Madry AT", "rf": "RandForest"}
+    rows = [("clean", "clean"), ("fgsm_transfer", "FGSM transfer"), ("fgsm_whitebox", "FGSM white-box"),
+            ("pgd_transfer", "PGD transfer"), ("pgd_whitebox", "PGD white-box")]
+    colors = {"baseline": "#8C8C8C", "static": "#4C78A8", "madry": "#54A24B", "rf": "#E45756"}
+
+    hsj = d.get("blackbox_hopskipjump_direct", {}).get("per_model", {})
+    labels = [lab for _, lab in rows] + (["HSJ black-box"] if hsj else [])
+    x = np.arange(len(labels))
+    w = 0.2
+
+    fig, ax = plt.subplots(figsize=(9.5, 4.8))
+    for i, m in enumerate(models):
+        means, errs, hatches = [], [], []
+        for key, _ in rows:
+            cell = d["grid"].get(key, {}).get(m)
+            means.append(cell["mean"] if cell else np.nan)
+            errs.append(cell["std"] if cell else 0.0)
+            hatches.append("")
+        if hsj:
+            cell = hsj.get(m, {}).get("f1")
+            means.append(cell["mean"] if cell else np.nan)
+            errs.append(cell["std"] if cell else 0.0)
+        bars = ax.bar(x + (i - 1.5) * w, means, w, yerr=errs, capsize=2,
+                      label=pretty[m], color=colors[m])
+        if hsj:
+            bars[-1].set_hatch("//")   # subsample, not full test set
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=8.5)
+    ax.set_ylabel("robust-support macro-F1")
+    ax.set_ylim(0, 1.05)
+    ax.set_title(f"{name}: attack x model grid (eps={d['attack_eps']}, "
+                 f"mean±std over {d['n_repeats']} repeats; hatched = subsample)", fontsize=10)
+    ax.legend(fontsize=8, ncol=4)
+    fig.tight_layout()
+    return fig

@@ -109,6 +109,31 @@ check. This is tested three ways:
 - The black-box attacker from Step 7, to see whether this same defence still works
   against an attacker who never used gradients at all.
 
+Crucially, the same check is also run on *clean, untouched* traffic first. Attack frames
+are unusual by their nature, so a lot of them already fail the check before anyone
+perturbs anything — without that control, "the check rejects almost every adversarial
+frame" would be measuring the wrong thing. Running it both ways separates "the
+perturbation made this frame illegal" from "this was an attack and was already illegal",
+and as a by-product scores the cheap check on its own, as a detector with no machine
+learning in it at all.
+
+### Step 12 — Widen the attack, so the conclusion doesn't rest on one method
+The defence comparison above uses one attack (the strong iterative gradient one). That
+invites an obvious objection: maybe the answer is an artefact of that particular attack.
+So the whole grid is re-run — one-step gradient, iterative gradient, and gradient-free
+black-box — against every model, under both attacker assumptions, to check whether the
+ranking of the defences actually depends on which attack you pick. The black-box attack
+is additionally re-scored after rounding every crafted frame to legal whole numbers,
+because an attack that only exists at fractional precision is not an attack anyone can
+send down a real wire.
+
+### Step 13 — Measure the accuracy trap instead of asserting it
+Every step above takes it on faith that evaluating on repeated traffic inflates scores.
+This step proves it, by scoring the same models two ways: once the naive way, letting
+copies of the same frame fall on both sides of the train/test divide, and once properly,
+where no copy of a frame can ever cross that line. The difference between the two numbers
+is the inflation a careless evaluation invents, measured rather than assumed.
+
 ---
 
 ## 2. File Structure
@@ -120,7 +145,7 @@ check. This is tested three ways:
 | `configs/` | One YAML file per dataset — paths, class names, dataset-specific knobs |
 | `datasets/raw/` | The original, unmodified data (gitignored — sourced separately) |
 | `datasets/processed/` | Generated arrays/CSVs/scalers each stage produces (small, tracked in git) |
-| `notebooks/` | Six step-by-step notebooks, one per pipeline stage, for interactive use |
+| `notebooks/` | Eight step-by-step notebooks, one per pipeline stage, for interactive use |
 | `results/` | The citable JSON output of every stage — the actual numbers cited anywhere |
 | `tests/` | Scripts that re-run the pipeline and check the numbers still match |
 | `README.md` | Project overview, reproduction instructions, findings, limitations |
@@ -159,12 +184,15 @@ whether the CNN needs class-weighting, and how the defence experiment is shaped 
 that dataset. Read by `config.py`'s loader, consumed by the matching dataset adapter
 and by `experiments/defended.py`.
 
-### `notebooks/01`–`06`
+### `notebooks/01`–`08`
 Interactive, step-by-step versions of the same pipeline. `01` and `02` produce the
-processed arrays everything else needs; `03`–`06` each read those processed arrays and
+processed arrays everything else needs; `03`–`07` each read those processed arrays and
 write their own `results/*.json` — they don't depend on each other, only on `02`'s
 output, so any one of them can be run on its own. `04` and `06` both write into the
-*same* results file (different sections), safely, in either order.
+*same* results file (different sections), safely, in either order. `07` runs the wide
+attack grid (Step 12) into its own file. `08` (Step 13) is the one exception to the
+"only needs `02`'s output" rule: it measures the accuracy trap, so it has to go back to
+the original, still-duplicated raw data that de-duplication threw away.
 
 ### `results/*.json`
 The actual output of the study — one JSON file per pipeline stage per dataset. This is

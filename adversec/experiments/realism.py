@@ -71,6 +71,67 @@ def observed_range_mask(X_int, ranges, id_column_index, data_column_indices):
     return plausible
 
 
+def envelope_detector_report(X_int, y_labels, ranges, id_column_index, data_column_indices,
+                             benign_label, class_names=None):
+    """
+    The envelope evaluated as a STANDALONE detector on unperturbed frames -- the control
+    that `threat_sizing`'s adversarial rejection rates need in order to be interpretable.
+
+    A rejection rate of "100% of adversarial frames" only demonstrates something about the
+    perturbation if the same frames were NOT already rejected before being perturbed. Attack
+    frames are, by construction, unusual traffic, so many of them fall outside the benign
+    envelope with no adversarial perturbation at all. This function measures exactly that:
+    per-class rejection on clean frames, plus the envelope's precision/recall/F1 treating
+    "rejected" as "flagged as an attack".
+
+    y_labels: 1-D array of class NAMES (strings), aligned with X_int.
+    Returns a dict ready to serialise alongside the threat-sizing numbers.
+    """
+    from sklearn.metrics import precision_recall_fscore_support
+
+    y_labels = np.asarray(y_labels)
+    passes = observed_range_mask(X_int, ranges, id_column_index, data_column_indices)
+    rejected = ~passes
+
+    names = list(class_names) if class_names is not None else sorted(set(y_labels.tolist()))
+    per_class = {}
+    for cname in names:
+        m = y_labels == cname
+        n = int(m.sum())
+        if n == 0:
+            continue
+        per_class[cname] = {
+            "n_frames": n,
+            "n_rejected": int(rejected[m].sum()),
+            "pct_rejected": round(100.0 * float(rejected[m].mean()), 1),
+        }
+
+    # Binary view: 1 = attack / flagged.
+    y_true = (y_labels != benign_label).astype(int)
+    y_pred = rejected.astype(int)
+    p, r, f1, _ = precision_recall_fscore_support(y_true, y_pred, average="binary", zero_division=0)
+
+    return {
+        "description": (
+            "Per-ID benign envelope applied to CLEAN, unperturbed test frames. This is the "
+            "control for the adversarial rejection rates: it separates 'the perturbation made "
+            "the frame illegal' from 'this frame was an attack and was already illegal'."
+        ),
+        "per_class_clean_rejection": per_class,
+        "as_standalone_detector": {
+            "note": "rejected-by-envelope treated as 'flagged as attack'; no machine learning involved",
+            "precision": round(float(p), 4),
+            "recall": round(float(r), 4),
+            "f1": round(float(f1), 4),
+            "attacks_total": int(y_true.sum()),
+            "attacks_caught": int((y_true & y_pred).sum()),
+            "attacks_missed": int((y_true & ~y_pred.astype(bool)).sum()),
+            "benign_total": int((1 - y_true).sum()),
+            "benign_false_alarms": int(((1 - y_true) & y_pred).sum()),
+        },
+    }
+
+
 def clip_to_id_envelope(X_int, ranges, id_column_index, data_column_indices):
     """
     Clip each frame's payload bytes into its OWN arbitration ID's observed [min,max]

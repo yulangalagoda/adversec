@@ -29,7 +29,7 @@ adversec/
 ├── evaluation.py        shared metrics (macro-F1, robust-support, per-class)
 └── cli.py               entry point
 configs/                 ciciov2024.yaml, road.yaml   (paths, class maps, defence shape)
-notebooks/               01..06, step-by-step drivers; each stage saves its own results/*.json
+notebooks/               01..08, step-by-step drivers; each stage saves its own results/*.json
 results/                 citable JSON reports, one file per stage per dataset (tracked in git)
 tests/                   migration gates (numbers must reproduce the committed artifacts)
 ```
@@ -54,8 +54,9 @@ library) — it shadows the Adversarial Robustness Toolbox and breaks imports.
 Raw data is gitignored — it's multi-GB (ROAD raw alone is ~3GB) and must be
 sourced separately, placed under `datasets/raw/`. `datasets/processed/` (the
 output of notebooks 01+02, or `adversec prep`) is small (~8MB total) and **is**
-tracked in git, so notebooks 03–06 can run on a fresh clone without needing the
-raw data at all.
+tracked in git, so notebooks 03–07 can run on a fresh clone without needing the
+raw data at all. `08_accuracy_trap` is the exception: it needs `datasets/raw/`,
+because the duplicated rows it measures are exactly what de-duplication discards.
 
 ## Reproduce
 
@@ -76,7 +77,7 @@ currently produce different `<name>_defence_results.json` schemas.
 
 ## Notebooks
 
-`notebooks/01..06` are step-by-step drivers over the same package code as the CLI,
+`notebooks/01..08` are step-by-step drivers over the same package code as the CLI,
 meant for interactive/report use. Each stage saves a citable artifact, so any
 notebook can be run on its own once its inputs exist on disk:
 
@@ -87,10 +88,28 @@ notebook can be run on its own once its inputs exist on disk:
 | `03_baselines` | 02's arrays + encoder | `results/<name>_baseline_metrics.json` |
 | `04_adversarial_attacks` | 02's arrays + encoder, 01's `strict.csv` | `results/<name>_adversarial_results.json` (per-class PGD CV + distance-to-benign) |
 | `05_defence` | 02's arrays + encoder | `results/<name>_defence_results.json` (`two_threat_model_averaged` schema — see below) |
-| `06_threat_sizing` | 02's arrays/scaler/encoder, 01/02's `train_dup.csv`/`test.csv` | `results/<name>_adversarial_results.json` (adds `threat_sizing`, `adaptive_envelope_aware_attack`, `blackbox_hopskipjump_attack`; merge-safe with 04, either order) |
+| `06_threat_sizing` | 02's arrays/scaler/encoder, 01/02's `train_dup.csv`/`test.csv` | `results/<name>_adversarial_results.json` (adds `threat_sizing`, `adaptive_envelope_aware_attack`, `blackbox_hopskipjump_attack`, `envelope_clean_control`; merge-safe with 04, either order) |
+| `07_attack_grid` | 02's arrays + encoder/scaler, 01/02's `train_dup.csv` | `results/<name>_attack_grid_results.json` (FGSM/PGD/HopSkipJump × baseline/static/Madry/RF × transfer/white-box) |
+| `08_accuracy_trap` | **raw data** + 01's dedup | `results/<name>_accuracy_trap.json` (leaky row-level CV vs honest signature-level CV) |
 
-Run `01` then `02` once per dataset; `03`–`06` only depend on `02`'s output, not
-on each other, so any one of them can be re-run standalone.
+Run `01` then `02` once per dataset; `03`–`07` only depend on `02`'s output, not
+on each other, so any one of them can be re-run standalone. `08` is the only
+notebook after `01` that reads `datasets/raw/`.
+
+**`06`'s clean-frame control.** `envelope_clean_control` measures what the per-ID
+envelope does to *unperturbed* test frames. Without it, an adversarial rejection
+rate is uninterpretable: attack frames are unusual traffic by construction, so many
+sit outside the benign envelope before any perturbation is applied. The same section
+scores the envelope as a standalone, no-ML detector.
+
+**`07`'s black-box column reports two F1s.** `f1` is measured on continuous frames;
+`f1_rounded` re-measures after rounding to legal integers. HopSkipJump minimises L2
+and can return perturbations smaller than one byte value — which cannot be injected on
+a real bus — so **`f1_rounded` is the number to quote** as the physically real threat.
+
+**`08` measures the accuracy trap directly.** Every other notebook infers it from the
+duplication rate; `08` runs the same models under leaky row-level CV and honest
+signature-level CV and reports the difference as `inflation_macro_f1`.
 
 **`05_defence`'s methodology differs from `adversec defend`.** The CLI/`experiments/defended.py`
 path runs the per-dataset-shaped comparison from `configs/*.yaml` (robust-support
@@ -131,6 +150,11 @@ clip is now per-feature, so the arbitration ID (0–2047) is no longer crushed t
 byte range.
 
 ## Key findings
+
+> **⚠ Numbers in this section are stale.** They predate the clean end-to-end re-run and
+> the audit fixes, and are pending regeneration from `results/*.json`. Every *conclusion*
+> below still holds — all significance verdicts are unchanged — but do not quote the
+> decimals until this banner is removed.
 
 - **Static adversarial training is inconsistent and sometimes actively harmful — the
   canonical iterative (Madry-style) form fixes this, on both datasets.** Trained the
