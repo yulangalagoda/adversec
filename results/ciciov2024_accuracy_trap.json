@@ -1,0 +1,61 @@
+{
+  "dataset": "ciciov2024",
+  "method": "leaky_vs_signature_level_cv",
+  "description": "The accuracy trap measured directly. Scheme B (row-level) runs stratified K-fold over the duplicated rows, so copies of a signature straddle the fold boundary and the model is partly scored on memorised frames; encoding and scaling are fitted globally, as a naive pipeline would. Scheme A (signature-level) runs K-fold over unique signatures with light duplication applied inside each training fold only. Same models, folds and epochs; the difference is the inflation a leaky evaluation invents.",
+  "n_splits": 2,
+  "cnn_epochs": 50,
+  "metric": "macro-F1",
+  "raw_duplication": {
+    "total_rows": 1408219,
+    "unique_signatures": 3588,
+    "duplicate_rows": 1404631,
+    "duplication_rate": 0.997452,
+    "duplication_rate_pct": 99.7452
+  },
+  "rowlevel_subsample": {
+    "max_rows": 50000,
+    "rows_used": 50000,
+    "duplication_pct_after_subsample": 99.258,
+    "note": "random subsample preserves the duplication structure; it caps runtime only. Scheme A uses all unique signatures."
+  },
+  "scheme_b_rowlevel_leaky": {
+    "rf": {
+      "mean": 1.0,
+      "std": 0.0,
+      "folds": [
+        1.0,
+        1.0
+      ]
+    },
+    "cnn": {
+      "mean": 1.0,
+      "std": 0.0,
+      "folds": [
+        1.0,
+        1.0
+      ]
+    }
+  },
+  "scheme_a_signature_level_honest": {
+    "rf": {
+      "mean": 0.6763786358228592,
+      "std": 0.029735894848134492,
+      "folds": [
+        0.6466427409747247,
+        0.7061145306709937
+      ]
+    },
+    "cnn": {
+      "mean": 0.7635129577545765,
+      "std": 4.720003635050318e-05,
+      "folds": [
+        0.763560157790927,
+        0.763465757718226
+      ]
+    }
+  },
+  "inflation_macro_f1": {
+    "rf": 0.3236,
+    "cnn": 0.2365
+  }
+}

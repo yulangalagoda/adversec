@@ -1,0 +1,73 @@
+{
+  "dataset": "road",
+  "method": "leaky_vs_signature_level_cv",
+  "description": "The accuracy trap measured directly. Scheme B (row-level) runs stratified K-fold over the duplicated rows, so copies of a signature straddle the fold boundary and the model is partly scored on memorised frames; encoding and scaling are fitted globally, as a naive pipeline would. Scheme A (signature-level) runs K-fold over unique signatures with light duplication applied inside each training fold only. Same models, folds and epochs; the difference is the inflation a leaky evaluation invents.",
+  "n_splits": 5,
+  "cnn_epochs": 50,
+  "metric": "macro-F1",
+  "raw_duplication": {
+    "total_rows": 66252,
+    "unique_signatures": 39858,
+    "duplicate_rows": 26394,
+    "duplication_rate": 0.398388,
+    "duplication_rate_pct": 39.8388
+  },
+  "rowlevel_subsample": {
+    "max_rows": 50000,
+    "rows_used": 50001,
+    "duplication_pct_after_subsample": 37.8532,
+    "note": "random subsample preserves the duplication structure; it caps runtime only. Scheme A uses all unique signatures."
+  },
+  "scheme_b_rowlevel_leaky": {
+    "rf": {
+      "mean": 0.9999328734452109,
+      "std": 5.658432692460943e-05,
+      "folds": [
+        0.9998624447174909,
+        0.9999009598823652,
+        0.999900962626198,
+        1.0,
+        1.0
+      ]
+    },
+    "cnn": {
+      "mean": 0.9983378678332413,
+      "std": 0.0005141540825599822,
+      "folds": [
+        0.9983674694594304,
+        0.9983553209356788,
+        0.9991156387875744,
+        0.9974921566678733,
+        0.9983587533156498
+      ]
+    }
+  },
+  "scheme_a_signature_level_honest": {
+    "rf": {
+      "mean": 0.9999358187518755,
+      "std": 5.240376969278942e-05,
+      "folds": [
+        1.0,
+        0.9998930331099117,
+        0.9998930331099117,
+        1.0,
+        0.9998930275395541
+      ]
+    },
+    "cnn": {
+      "mean": 0.9947560685697215,
+      "std": 0.0008172989938496981,
+      "folds": [
+        0.9940949004663743,
+        0.9943869068493374,
+        0.9950605399874771,
+        0.9962167970560636,
+        0.9940211984893559
+      ]
+    }
+  },
+  "inflation_macro_f1": {
+    "rf": -0.0,
+    "cnn": 0.0036
+  }
+}

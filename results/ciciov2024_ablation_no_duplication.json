@@ -59,7 +59,7 @@
         "signatures": 10,
         "mean_distance": 0.6219,
         "median_distance": 0.6219,
-        "robustness_at_0.01": 0.56
+        "robustness_at_0.01": 0.569
       },
       "spoofing-SPEED": {
         "signatures": 5,
@@ -74,7 +74,7 @@
         "robustness_at_0.01": 0.333
       }
     },
-    "pearson_r": -0.324,
+    "pearson_r": -0.315,
     "n_classes": 5
   }
 }
