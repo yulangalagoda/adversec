@@ -145,7 +145,8 @@ is the inflation a careless evaluation invents, measured rather than assumed.
 | `configs/` | One YAML file per dataset — paths, class names, dataset-specific knobs |
 | `datasets/raw/` | The original, unmodified data (gitignored — sourced separately) |
 | `datasets/processed/` | Generated arrays/CSVs/scalers each stage produces (small, tracked in git) |
-| `notebooks/` | Eight step-by-step notebooks, one per pipeline stage, for interactive use |
+| `notebooks/` | Nine step-by-step notebooks, one per pipeline stage, for interactive use |
+| `figures/` | Every figure for the write-up (PNG + PDF), generated from `results/` by notebook 09 |
 | `results/` | The citable JSON output of every stage — the actual numbers cited anywhere |
 | `tests/` | Scripts that re-run the pipeline and check the numbers still match |
 | `README.md` | Project overview, reproduction instructions, findings, limitations |
@@ -169,13 +170,13 @@ is the inflation a careless evaluation invents, measured rather than assumed.
 | `models/cnn.py` | Defines the small 1D-CNN and its training loop | Used everywhere a CNN needs training: `baseline.py`, `adversarial.py`, `defense.py`, `crossval.py`, all notebooks |
 | `experiments/attack.py` | Wraps a trained CNN so gradients are accessible; generates FGSM, PGD, and HopSkipJump adversarial examples | Used by `adversarial.py`, `defense.py`, `crossval.py`, notebooks 04/05/06 |
 | `experiments/defense.py` | Builds an adversarially-augmented training set and trains the "defended" CNN | Used by `crossval.py` and notebook 05 |
-| `experiments/crossval.py` | Every cross-validation scheme: leaky row-level vs honest signature-level, per-class robustness, defended-model comparison | Used by `adversarial.py`, `defended.py`, notebooks 04/05 |
-| `experiments/realism.py` | Physical-plausibility checks: integer rounding, learning the per-ID "envelope" of legal byte values, checking/clipping frames against it | Used by `adversarial.py`'s threat-sizing function and notebook 06 |
+| `experiments/crossval.py` | Every cross-validation scheme: leaky row-level vs honest signature-level, per-class robustness, defended-model comparison | Used by `adversarial.py`, `defended.py`, notebooks 04/08 (the leaky-vs-honest pair is what notebook 08 runs) |
+| `experiments/realism.py` | Physical-plausibility checks: integer rounding, learning the per-ID "envelope" of legal byte values, checking/clipping frames against it, and scoring the envelope on clean frames as a standalone detector (the control for every rejection rate) | Used by `adversarial.py`'s threat-sizing function and notebooks 06/07 |
 | `experiments/baseline.py` | Orchestrates Step 6 (train + evaluate both clean models) and saves `results/<name>_baseline_metrics.json` | Called by `cli.py`'s `baseline` command; mirrored (not called) by notebook 03 |
 | `experiments/adversarial.py` | Orchestrates Steps 7–9 and 11 (attacks, cross-validated robustness, distance-to-benign mechanism, threat-sizing) and saves `results/<name>_adversarial_results.json` | Called by `cli.py`'s `attack` command; mirrored (not called) by notebooks 04/06 |
 | `experiments/defended.py` | Orchestrates the *older* defence comparison shape (per `configs/*.yaml`) and saves `results/<name>_defence_results.json` | Called by `cli.py`'s `defend` command — superseded for reporting purposes by notebook 05's own newer methodology |
 | `evaluation.py` | Shared metric functions (`evaluate_model`, `robust_support_f1`) used identically by every model so comparisons are fair | Used by `baseline.py` and notebooks 03/04 |
-| `report.py` | Loads `results/*.json` and draws the matplotlib figures for the write-up | Standalone — reads results, produces plots, nothing else depends on it |
+| `report.py` | Loads `results/*.json` and draws the matplotlib figures for the write-up — nine plots: signature diversity, baseline confusion, per-class robustness, distance mechanism, threat sizing, the two-threat-model defence, the attack grid, the accuracy trap, and the envelope control | Standalone — reads results, produces plots, nothing else depends on it |
 | `cli.py` | The `adversec` command-line entry point (`prep`, `baseline`, `attack`, `defend`) | The "glue" — calls into `datasets/`, `pipeline/`, and `experiments/` based on which subcommand and `--dataset` flag is given |
 
 ### `configs/ciciov2024.yaml`, `configs/road.yaml`
@@ -184,13 +185,15 @@ whether the CNN needs class-weighting, and how the defence experiment is shaped 
 that dataset. Read by `config.py`'s loader, consumed by the matching dataset adapter
 and by `experiments/defended.py`.
 
-### `notebooks/01`–`08`
+### `notebooks/01`–`09`
 Interactive, step-by-step versions of the same pipeline. `01` and `02` produce the
 processed arrays everything else needs; `03`–`07` each read those processed arrays and
 write their own `results/*.json` — they don't depend on each other, only on `02`'s
 output, so any one of them can be run on its own. `04` and `06` both write into the
 *same* results file (different sections), safely, in either order. `07` runs the wide
-attack grid (Step 12) into its own file. `08` (Step 13) is the one exception to the
+attack grid (Step 12) into its own file. `09` needs no models at all — it reads the saved
+results and renders every figure for the write-up into `figures/`, so plots can be
+regenerated on any machine in seconds. `08` (Step 13) is the one exception to the
 "only needs `02`'s output" rule: it measures the accuracy trap, so it has to go back to
 the original, still-duplicated raw data that de-duplication threw away.
 
@@ -244,14 +247,32 @@ implemented the cheap way, and that's fixable.
 Separately, the project tests a much simpler, non-machine-learning defence: since a
 car's internal network has fairly predictable, repetitive legitimate traffic, a cheap
 check can flag any frame whose values fall outside what's normally ever been seen for
-that specific message type. This turns out to catch the large majority of attacks
-crafted by standard methods, at a low and measured cost in false alarms on genuine
-traffic. But it's much less effective against a smarter attacker: one who already knows
-about the check and deliberately keeps a legitimate-looking ID while staying within
-its normal byte range gets through the vast majority of the time, and one who never
-needed access to the model's internals at all (only its predictions) can still do
-serious damage — sometimes more than a "stronger," fully-informed attacker who ignores
-the check entirely.
+that specific message type. Running that check on untouched traffic first turns out to
+matter a great deal. On the repetitive dataset it flags *every single attack frame*
+before anyone perturbs anything, which means the headline "it catches almost all the
+crafted attacks" was mostly measuring that these were attacks, not that they had been
+tampered with. Read properly, the cheap check is a perfectly decent attack detector in
+its own right — on one dataset it catches every attack at a small, measured cost in
+false alarms on genuine traffic; on the other it catches two attack types completely and
+is blind to two others, because those two impersonate a legitimate message using
+perfectly normal-looking values.
+
+It is also, on its own, not security. An attacker who already knows the check is there,
+keeps a legitimate ID and stays inside that ID's normal byte range goes from being caught
+every time to passing almost every time — while still degrading the detector. And an
+attacker who never had access to the model's internals at all, only its predictions, can
+still do serious damage — sometimes more than a "stronger", fully-informed attacker.
+That last result needed one extra check of its own: because such an attacker searches for
+the *smallest* effective change, it can land on a change smaller than the smallest step a
+real CAN frame can actually take. Re-measuring after snapping every crafted frame to legal
+whole numbers shows the threat is genuine but was overstated for the simpler model.
+
+Finally, the project stops asserting its own founding premise and measures it. Scoring the
+same models twice — once letting copies of the same frame fall on both sides of the
+train/test divide, once forbidding it — the repetitive dataset reports a *flawless* score
+the naive way and a mediocre one the honest way, while the varied dataset barely moves.
+The inflation isn't a modelling subtlety; it is the entire difference between a headline
+result and a real one.
 
 Altogether, the project isn't just "here's a model, here's its accuracy" — it's a
 structured investigation into *when* a particular defence works, *why* it works or

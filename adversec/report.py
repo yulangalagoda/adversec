@@ -282,6 +282,90 @@ def plot_defence(name: str):
     return None
 
 
+def plot_accuracy_trap(name: str):
+    """
+    The accuracy trap measured, not asserted: macro-F1 under leaky row-level CV vs honest
+    signature-level CV, per model, with the inflation annotated above each pair.
+
+    Read the two datasets side by side -- the whole point is that the gap is enormous on
+    the heavily duplicated dataset and absent on the lightly duplicated one.
+    """
+    d = load_results(name, "accuracy_trap")
+    if d is None:
+        print(f"[{name}] accuracy_trap.json absent (run notebook 08)")
+        return None
+    import matplotlib.pyplot as plt
+
+    models = [("rf", "Random Forest"), ("cnn", "1D-CNN")]
+    leaky = [d["scheme_b_rowlevel_leaky"][m]["mean"] for m, _ in models]
+    leaky_e = [d["scheme_b_rowlevel_leaky"][m]["std"] for m, _ in models]
+    honest = [d["scheme_a_signature_level_honest"][m]["mean"] for m, _ in models]
+    honest_e = [d["scheme_a_signature_level_honest"][m]["std"] for m, _ in models]
+
+    x = np.arange(len(models))
+    fig, ax = plt.subplots(figsize=(6.4, 4.5))
+    ax.bar(x - 0.2, leaky, 0.4, yerr=leaky_e, capsize=3,
+           label="row-level CV (leaky)", color="#E45756")
+    ax.bar(x + 0.2, honest, 0.4, yerr=honest_e, capsize=3,
+           label="signature-level CV (honest)", color="#4C78A8")
+    for i, (m, _) in enumerate(models):
+        infl = d["inflation_macro_f1"][m]
+        top = max(leaky[i], honest[i])
+        ax.annotate(f"+{infl:.3f}" if infl > 0 else f"{infl:.3f}",
+                    (i, top + 0.04), ha="center", fontsize=10, fontweight="bold",
+                    color="#B3261E" if infl > 0.05 else "#555")
+    ax.set_xticks(x)
+    ax.set_xticklabels([lab for _, lab in models])
+    ax.set_ylabel("macro-F1")
+    ax.set_ylim(0, 1.18)
+    dup = d["raw_duplication"]["duplication_rate_pct"]
+    ax.set_title(f"{name}: the accuracy trap ({dup:.1f}% duplicated rows)\n"
+                 f"inflation = what a leaky evaluation invents", fontsize=10)
+    ax.legend(fontsize=8, loc="lower right")
+    fig.tight_layout()
+    return fig
+
+
+def plot_envelope_control(name: str):
+    """
+    The per-ID envelope applied to CLEAN, unperturbed frames -- the control that makes the
+    adversarial rejection rates interpretable, plus the envelope's standalone detector score.
+
+    Benign is drawn separately (it is the false-alarm bar); attack classes are the recall bars.
+    """
+    d = load_results(name, "adversarial_results")
+    if d is None or "envelope_clean_control" not in d:
+        print(f"[{name}] envelope_clean_control absent (re-run notebook 06)")
+        return None
+    import matplotlib.pyplot as plt
+
+    ec = d["envelope_clean_control"]
+    cfg = config.load_dataset_config(name)
+    benign = cfg["benign_label"]
+    per = ec["per_class_clean_rejection"]
+
+    order = [c for c in per if c != benign] + ([benign] if benign in per else [])
+    pct = [per[c]["pct_rejected"] for c in order]
+    cols = ["#54A24B" if c != benign else "#E45756" for c in order]
+
+    fig, ax = plt.subplots(figsize=(7.5, 4.4))
+    ax.bar(range(len(order)), pct, color=cols)
+    for i, c in enumerate(order):
+        ax.text(i, pct[i] + 1.5, f"{pct[i]:.1f}%\n(n={per[c]['n_frames']:,})",
+                ha="center", fontsize=7.5)
+    ax.set_xticks(range(len(order)))
+    ax.set_xticklabels(order, rotation=25, ha="right", fontsize=8)
+    ax.set_ylabel("% of CLEAN frames rejected")
+    ax.set_ylim(0, 118)
+    det = ec["as_standalone_detector"]
+    ax.set_title(f"{name}: envelope on unperturbed frames "
+                 f"(green = attack recall, red = benign false alarms)\n"
+                 f"as a standalone detector: precision {det['precision']:.3f}, "
+                 f"recall {det['recall']:.3f}, F1 {det['f1']:.3f}", fontsize=9.5)
+    fig.tight_layout()
+    return fig
+
+
 def plot_attack_grid(name: str):
     """
     The notebook-07 grid: every attack x model cell as grouped bars, so the question the

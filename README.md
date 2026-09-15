@@ -29,8 +29,9 @@ adversec/
 ├── evaluation.py        shared metrics (macro-F1, robust-support, per-class)
 └── cli.py               entry point
 configs/                 ciciov2024.yaml, road.yaml   (paths, class maps, defence shape)
-notebooks/               01..08, step-by-step drivers; each stage saves its own results/*.json
+notebooks/               01..09, step-by-step drivers; each stage saves its own results/*.json
 results/                 citable JSON reports, one file per stage per dataset (tracked in git)
+figures/                 write-up figures (PNG + PDF), regenerated from results/ by notebook 09
 tests/                   migration gates (numbers must reproduce the committed artifacts)
 ```
 
@@ -77,7 +78,7 @@ currently produce different `<name>_defence_results.json` schemas.
 
 ## Notebooks
 
-`notebooks/01..08` are step-by-step drivers over the same package code as the CLI,
+`notebooks/01..09` are step-by-step drivers over the same package code as the CLI,
 meant for interactive/report use. Each stage saves a citable artifact, so any
 notebook can be run on its own once its inputs exist on disk:
 
@@ -91,6 +92,7 @@ notebook can be run on its own once its inputs exist on disk:
 | `06_threat_sizing` | 02's arrays/scaler/encoder, 01/02's `train_dup.csv`/`test.csv` | `results/<name>_adversarial_results.json` (adds `threat_sizing`, `adaptive_envelope_aware_attack`, `blackbox_hopskipjump_attack`, `envelope_clean_control`; merge-safe with 04, either order) |
 | `07_attack_grid` | 02's arrays + encoder/scaler, 01/02's `train_dup.csv` | `results/<name>_attack_grid_results.json` (FGSM/PGD/HopSkipJump × baseline/static/Madry/RF × transfer/white-box) |
 | `08_accuracy_trap` | **raw data** + 01's dedup | `results/<name>_accuracy_trap.json` (leaky row-level CV vs honest signature-level CV) |
+| `09_figures` | `results/*.json` only | `figures/<name>_<plot>.png` + `.pdf` — every figure for the write-up |
 
 Run `01` then `02` once per dataset; `03`–`07` only depend on `02`'s output, not
 on each other, so any one of them can be re-run standalone. `08` is the only
@@ -107,9 +109,20 @@ scores the envelope as a standalone, no-ML detector.
 and can return perturbations smaller than one byte value — which cannot be injected on
 a real bus — so **`f1_rounded` is the number to quote** as the physically real threat.
 
+⚠ **`06` and `07` report HopSkipJump on different metrics — don't mix them in one table.**
+`06` uses plain macro-F1 over *all* classes (CICIoV2024: 0.069); `07` uses robust-support
+macro-F1, i.e. only classes with ≥2 test frames (CICIoV2024 baseline: 0.053). They also
+draw independent subsamples. The numbers differ for those reasons, not because either is
+wrong — quote `07`'s for anything compared against the defence grid, and `06`'s only
+alongside its own PGD-on-the-same-subsample reference.
+
 **`08` measures the accuracy trap directly.** Every other notebook infers it from the
 duplication rate; `08` runs the same models under leaky row-level CV and honest
 signature-level CV and reports the difference as `inflation_macro_f1`.
+
+**`09` needs neither GPU nor raw data.** It reads `results/*.json` and renders all nine
+figures for both datasets into `figures/` as PNG (200 dpi) and PDF (vector, for the
+write-up), so figures can be regenerated on a laptop without re-running any experiment.
 
 **`05_defence`'s methodology differs from `adversec defend`.** The CLI/`experiments/defended.py`
 path runs the per-dataset-shaped comparison from `configs/*.yaml` (robust-support
@@ -151,56 +164,75 @@ byte range.
 
 ## Key findings
 
-> **⚠ Numbers in this section are stale.** They predate the clean end-to-end re-run and
-> the audit fixes, and are pending regeneration from `results/*.json`. Every *conclusion*
-> below still holds — all significance verdicts are unchanged — but do not quote the
-> decimals until this banner is removed.
+*All numbers below are generated from `results/*.json` and match the committed notebook
+outputs. Robust-support macro-F1 unless stated otherwise.*
 
 - **Static adversarial training is inconsistent and sometimes actively harmful — the
   canonical iterative (Madry-style) form fixes this, on both datasets.** Trained the
   cheap/static way (a fixed adversarial set crafted once from a frozen baseline), AT
-  helps significantly under transfer attack on both datasets (CICIoV2024: p=0.0001;
-  ROAD: p<0.0001), but under white-box it has **no significant effect on CICIoV2024**
-  (p=0.236 — a genuine null result) and **significantly backfires on ROAD** (p=0.0006:
-  the defended model ends up *less* robust than the undefended baseline's own
-  robustness). Retrained the proper Madry-style way (PGD crafted fresh against the
-  model's current weights, every batch), white-box robustness improves **significantly
-  over the undefended baseline on both datasets** (CICIoV2024: +0.120, p=0.0003; ROAD:
-  +0.213, p<0.0001) and **significantly over the static approach on both datasets**
-  (CICIoV2024: +0.154, p=0.0003; ROAD: +0.380, p<0.0001). The trade-off: Madry AT's
-  *transfer*-attack robustness is noticeably lower than static AT's on both datasets
-  (CICIoV2024: 0.442 vs 0.710; ROAD: 0.499 vs 0.811) — it specialises for the
-  worst case at some real cost to the more common one.
-- **The accuracy trap**: ~99.75% duplication in CICIoV2024 (1,408,219 rows → 3,588
-  unique signatures) inflates accuracy; on honestly de-duplicated data both baselines'
-  macro-F1 collapses well below their near-perfect accuracy (RF: 0.997 acc / 0.776
-  macro-F1). ROAD is far less duplicated (39.8%) and its clean baselines are genuinely
-  near-perfect (RF macro-F1 = 1.0), not just accuracy-trapped.
-- **The per-ID envelope validator stops naive attacks well, but is largely evaded by an
-  attacker who already knows it's there.** Against a naive/unconstrained PGD attacker,
-  the envelope rejects the large majority of adversarial frames on both datasets
-  (CICIoV2024: 99.9–100% across the epsilon sweep; ROAD: 93.6–93.7%) at a low,
-  measured false-positive cost on held-out legitimate traffic (CICIoV2024: 3.2%; ROAD:
-  1.3%) — confirming these are real results, not artifacts of an over-narrow envelope.
-  But an attacker who simply keeps a real, already-legitimate arbitration ID and clips
-  the payload bytes into that ID's own observed range evades almost entirely:
-  rejection drops to **2.9% (CICIoV2024)** and **1.4% (ROAD)**. On ROAD this adaptive
-  attack isn't even weaker in effect — at low epsilon it's *more* damaging than the
-  unconstrained attack (F1 0.495 vs 0.744 at eps=0.01), since freezing the ID doesn't
-  reduce the perturbation budget available to the 8 payload bytes under an L∞ threat
-  model. A gradient-free black-box attack (HopSkipJump, deliberately reduced query
-  budget, ≤20 test signatures/class) is even more damaging than a full white-box PGD
-  attack at eps=0.10 on both datasets (CICIoV2024: F1 0.043 vs PGD's 0.241; ROAD: F1
-  0.062 vs PGD's 0.227) — a minimum-perturbation search finds highly effective
-  perturbations without ever touching a gradient. The envelope still catches most of
-  it on CICIoV2024 (93.1% rejected) but noticeably less on ROAD (81.0%, vs 93.7% for
-  naive PGD).
+  helps significantly under transfer attack on both datasets (CICIoV2024: +0.442,
+  p<0.0001; ROAD: +0.499, p<0.0001), but under white-box it has **no significant effect
+  on CICIoV2024** (−0.020, p=0.255 — a genuine null result) and **significantly backfires
+  on ROAD** (−0.098, p=0.015: the defended model ends up *less* robust than the
+  undefended baseline). Retrained the proper Madry-style way (PGD crafted fresh against
+  the model's current weights, every batch), white-box robustness improves
+  **significantly over the undefended baseline on both datasets** (CICIoV2024: +0.104,
+  p=0.003; ROAD: +0.265, p<0.0001) and **significantly over the static approach on both**
+  (CICIoV2024: +0.122, p=0.0007; ROAD: +0.318, p<0.0001). Two costs come with it: Madry
+  AT's *transfer* robustness is well below static AT's (CICIoV2024 0.471 vs 0.728; ROAD
+  0.513 vs 0.829), and on ROAD it costs a great deal of **clean** accuracy (0.766 vs the
+  baseline's 0.997 — a 23-point drop), whereas on CICIoV2024 clean performance is
+  untouched (0.791 vs 0.793).
+- **The defence ranking does not depend on which attack you use** (notebook 07). Madry AT
+  beats static AT white-box under PGD (CICIoV2024 +0.119, p=0.0004; ROAD +0.356,
+  p=0.0009) *and* under FGSM (CICIoV2024 +0.207, p=0.037; ROAD +0.337, p=0.0015), while
+  PGD-vs-FGSM against the Madry model is not significantly different on either dataset
+  (p=0.105, p=0.169). The static-vs-iterative finding is therefore a property of the
+  defence, not an artifact of the attack chosen to test it.
+- **Under attack, an adversarially trained CNN beats the Random Forest — on clean traffic
+  it does not.** Across the full grid the best AT-CNN wins **9 of 10 attack conditions**
+  (the exception is HopSkipJump on CICIoV2024), by margins up to +0.62 macro-F1; the RF
+  leads only on clean data (CICIoV2024 0.859 vs 0.848; ROAD 1.000 vs 0.976).
+- **The accuracy trap, measured rather than asserted** (notebook 08). Running the *same
+  models* under leaky row-level CV and honest signature-level CV: on CICIoV2024 a leaky
+  evaluation reports a **perfect macro-F1 of 1.000 for both RF and CNN**, while the
+  honest measurement is 0.676 (RF) and 0.764 (CNN) — an invented **+0.324 / +0.236**. On
+  ROAD the same contrast produces **essentially nothing** (−0.000 RF, +0.004 CNN). The
+  trap tracks duplication exactly: CICIoV2024 is 99.75% duplicate rows (1,408,219 → 3,588
+  unique signatures), ROAD only 39.8% (66,252 → 39,858). This is the single cleanest
+  demonstration in the study that leakage control is a prerequisite, not a nicety.
+- **The per-ID envelope is a *detector*, not a perturbation filter — and it is evaded by
+  an attacker who knows it's there.** The clean-frame control (notebook 06) is what makes
+  the adversarial rejection rates readable: applied to *unperturbed* frames the envelope
+  already rejects **100% of every attack class on CICIoV2024** and 100% of `fuzzing` and
+  `max-speedometer` on ROAD, while missing both `reverse-light` classes entirely (they
+  are masquerade-style attacks on legitimate IDs with in-range bytes). So the headline
+  "the envelope rejects ~all adversarial frames" is mostly detecting *attacks*, not
+  *perturbations*. As a standalone, no-ML detector it scores precision 0.281 / recall
+  1.000 / F1 0.439 on CICIoV2024 (9/9 attacks caught, 23/709 benign false alarms) and
+  precision 0.976 / recall 0.597 / F1 0.741 on ROAD. Against naive PGD it rejects 100%
+  (CICIoV2024) and 91.1–91.2% (ROAD) at a measured benign false-positive cost of 3.24%
+  and 1.32%. But an attacker who keeps a real arbitration ID and clips payload bytes into
+  that ID's own observed range drops rejection to **2.9%** and **1.4%** — i.e. converts
+  frames that were 100% rejected into frames that pass, while still degrading the model
+  (F1 0.241 and 0.317 at eps=0.10).
+- **Black-box attacks are severe, and remain so after the physical-realisability check.**
+  HopSkipJump (reduced query budget, ≤20 signatures/class) is more damaging than white-box
+  PGD at eps=0.10 on both datasets (CICIoV2024 F1 0.069 vs 0.171; ROAD 0.068 vs 0.226)
+  without ever touching a gradient. Because it minimises L2 it can return frames perturbed
+  by *less than one integer unit* — against the ROAD Random Forest, mean L2 = 0.003 — so
+  the grid reports both a raw and an integer-rounded F1. Rounding recovers some of the
+  Random Forest's score (ROAD 0.067 → 0.113; CICIoV2024 0.320 → 0.402) and leaves the CNNs
+  unchanged (their perturbations are far above integer granularity), so **the black-box
+  threat is real but was overstated for the tree model** by the continuous-space number.
+  `f1_rounded` is the figure to quote.
 - **The distance-to-benign robustness mechanism inverts on CICIoV2024** (pearson_r =
-  -0.531, vs +0.726 on ROAD — classes *closer* to benign are the *more* robust ones,
-  the opposite pattern to ROAD). An ablation removing the light-duplication
-  convergence crutch shows the inversion survives (r = -0.348) — same sign, reduced
-  magnitude — so it is a real, if amplified-by-duplication, data-structure effect, not
-  an artifact of the padding.
+  −0.531, n=5, vs +0.728 on ROAD, n=4 — classes *closer* to benign are the *more* robust
+  ones, the opposite pattern to ROAD). An ablation removing the light-duplication
+  convergence crutch shows the inversion survives (r = −0.315) — same sign, reduced
+  magnitude — so it is a real, if amplified-by-duplication, data-structure effect rather
+  than an artifact of the padding. Treat it as exploratory: at n=4–5 classes neither
+  correlation approaches significance.
 
 ## Limitations
 
@@ -225,11 +257,31 @@ byte range.
   overreach — what's been shown is specifically that *how* PGD-based AT is
   implemented (static vs iterative) changes the result substantially, not that this
   generalises to every possible defence.
-- **Madry AT's transfer-attack robustness was not formally significance-tested**
-  against the undefended baseline the way its white-box robustness was — only the
-  mean values are reported (CICIoV2024: 0.442 vs baseline's 0.280; ROAD: 0.499 vs
-  0.352). The direction is consistent with a real improvement, but treat it as
-  indicative rather than confirmed until a paired test is added there too.
+- *(resolved — pending a re-run of notebook 05's significance cells)* **Madry AT's
+  transfer-attack robustness** now has the same paired test as its white-box robustness
+  (`madry_transfer_vs_undefended`), computed from the saved runs with no retraining. On
+  the committed runs it comes out significant on both datasets (CICIoV2024 +0.185,
+  p=0.0009; ROAD +0.227, p=0.0007), but that key only appears in
+  `<name>_defence_results.json` once those cells are re-run.
+- **The envelope-aware adaptive attack is not checked for goal preservation.** It clips
+  payload bytes into the target ID's benign range, which is what lets it pass the
+  envelope — but a `max-speedometer` frame whose bytes have been clipped into the normal
+  range may no longer *set the speedometer to max*. What is demonstrated is that
+  protocol-valid frames exist which evade both the filter and the detector; whether they
+  still achieve the attacker's physical objective on a running vehicle is untested and
+  out of scope.
+- **The envelope's CICIoV2024 detector precision rests on 9 attack frames.** The
+  clean-frame control reports precision 0.281 / recall 1.000 there, but the test split
+  contains only 9 attack frames in total against 709 benign, so precision in particular
+  is a very thin measurement. ROAD's version (3,734 attack frames) is the one to trust.
+- **The accuracy-trap contrast caps the leaky arm at 50,000 rows.** Row-level CV runs on
+  a stratified subsample of the raw duplicated data (CICIoV2024's raw form is 1.4M rows),
+  which preserves the duplication structure — 99.26% after subsampling vs 99.75% raw —
+  but is not the full table. The honest arm uses every unique signature. CICIoV2024 also
+  uses 2 folds (`spoofing-GAS` has only 2 signatures), so its honest CNN/RF ordering
+  there (CNN 0.764 > RF 0.676) differs from the single held-out split in notebook 03
+  (RF 0.776 > CNN 0.661); both are thin, and neither should be read as settling the
+  simple-vs-deep question on that dataset.
 - **`threat_sizing()` (and its adaptive/black-box extensions) is a single run, not
   cross-validated** — unlike the per-class robustness CV or the 10-repeat defence
   result. CUDA/cuDNN is not forced deterministic in this codebase, so re-running it
@@ -244,4 +296,6 @@ byte range.
   dataset — 29 total for CICIoV2024, since most of its classes have only 1-4 test
   signatures to sample from; 100 for ROAD), not the full test set. Its F1 is a lower
   bound on black-box attacker capability, not an upper bound — a well-resourced
-  attacker with the full query budget would likely do at least as well.
+  attacker with the full query budget would likely do at least as well. On CICIoV2024
+  the robust-support subset of that subsample is roughly 26 frames, so quote those cells
+  with their n; ROAD's 100 are better founded.
